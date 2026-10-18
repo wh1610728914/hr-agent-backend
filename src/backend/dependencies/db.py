@@ -3,7 +3,7 @@ from backend.db.database import SessionLocal
 
 
 async def get_db():
-    async with SessionLocal as session:
+    async with SessionLocal() as session:
         try:
             yield session  # 把session 交给路由函数用
             # 没问题就提交

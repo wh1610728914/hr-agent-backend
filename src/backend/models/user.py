@@ -39,7 +39,9 @@ class User(BaseTable):
     realname: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="真实姓名"
     )
-    avatar: Mapped[str] = mapped_column(String(255), comment="头像")
+    avatar: Mapped[str | None] = mapped_column(
+        String(255), comment="头像", nullable=True
+    )
     status: Mapped[UserStatus] = mapped_column(
         SEnum(UserStatus), default=UserStatus.ACTIVE, comment="用户状态"
     )
