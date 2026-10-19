@@ -21,9 +21,10 @@ dependencies = [
     "bcrypt==4.0.1",
     "pyjwt>=2.15.1",
     "redis>=8.1.0",
-    "fastapi-cache2[redis]>=0.1.8",
+    "fastapi-cache2>=0.2.2",
     "fastapi-mail>=1.6.2",
     "loguru>=0.7.3",
+    "shortuuid>=1.0.13",
 ]
 
 [project.scripts]

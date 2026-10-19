@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class UserResponse(BaseModel):
     """用户信息"""
 
-    id: int = Field(..., description="用户ID")
+    id: str = Field(..., description="用户ID")
     username: str = Field(..., description="用户名")
     email: EmailStr = Field(..., description="邮箱")
     phone_number: Optional[str] = Field(..., description="手机号")
@@ -25,5 +25,5 @@ class UserResponse(BaseModel):
 class InviteUserRequest(BaseModel):
     """发送邀请码请求参数"""
 
-    email: EmailStr
-    department_id: str
+    email: EmailStr = Field(..., description="邮箱")
+    department_id: str = Field(..., description="部门id")

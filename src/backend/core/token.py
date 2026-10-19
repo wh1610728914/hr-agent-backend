@@ -1,4 +1,6 @@
+# from jwt.api_jwt import PyJWT, encode, decode, ExpiredSignatureError, InvalidTokenError
 import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
@@ -82,11 +84,11 @@ class AuthHandler(metaclass=SingletonMeta):
                     status_code=HTTP_403_FORBIDDEN, detail="Token类型错误！"
                 )
             return payload["iss"]
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN, detail="Access Token已过期！"
             )
-        except jwt.InvalidTokenError as e:
+        except InvalidTokenError as e:
             raise HTTPException(
                 status_code=HTTP_403_FORBIDDEN, detail="Access Token不可用！"
             )
@@ -101,11 +103,11 @@ class AuthHandler(metaclass=SingletonMeta):
                     status_code=HTTP_401_UNAUTHORIZED, detail="Token类型错误！"
                 )
             return payload["iss"]
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED, detail="Refresh Token已过期！"
             )
-        except jwt.InvalidTokenError as e:
+        except InvalidTokenError as e:
             raise HTTPException(
                 status_code=HTTP_401_UNAUTHORIZED, detail="Refresh Token不可用！"
             )

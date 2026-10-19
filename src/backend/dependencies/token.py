@@ -1,4 +1,4 @@
-from backend.core.jwt import AuthHandler
+from backend.core.token import AuthHandler
 
 
 def get_auth_handler():

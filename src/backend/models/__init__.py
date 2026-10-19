@@ -1,1 +1,2 @@
-from .user import User
+from .department import DepartmentModel
+from .user import UserModel

@@ -1,6 +1,6 @@
 # 使用fastapi-mail库初始化邮件发送实例的代码
 
-from backend import settings
+from backend.settings import settings
 from fastapi_mail import ConnectionConfig, FastMail
 from pydantic import SecretStr
 

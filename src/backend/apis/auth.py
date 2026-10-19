@@ -1,8 +1,8 @@
 from backend.dependencies.db import get_db
-from backend.dependencies.jwt import get_auth_handler
+from backend.dependencies.token import get_auth_handler
 from backend.schemas.auth import LoginRequest
 from backend.services.auth import loginEmailService
-from backend.core.jwt import AuthHandler
+from backend.core.token import AuthHandler
 from backend.schemas import Response
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession

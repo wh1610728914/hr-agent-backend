@@ -60,7 +60,3 @@ class HRCache:
             invite_info = InviteInfoSchema.model_validate_json(invite_info_json)
             return invite_info
         return None
-
-
-# python的模块天然只加载以此，所以这样实例化就是单例
-hr_cache = HRCache()

@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import List, Optional
 
 from backend.db.database import BaseTable
 from backend.core import password
-from sqlalchemy import Boolean, String, Enum as SEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, ForeignKey, String, Enum as SEnum, Table
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
+from backend.models.association_tables import user_department
+
+# from backend.models.department import DepartmentModel
 
 
 class UserStatus(enum.Enum):
@@ -13,7 +16,7 @@ class UserStatus(enum.Enum):
     RESIGNED = "RESIGNED"  # 已离职
 
 
-class User(BaseTable):
+class UserModel(BaseTable):
     """用户信息表"""
 
     __tablename__ = "users"
@@ -50,6 +53,26 @@ class User(BaseTable):
         Boolean, default=False, comment="是否是超级用户"
     )
     # department:
+    department_id: Mapped[Optional[str]] = mapped_column(ForeignKey("departments.id"))
+
+    # 在DepartmentModel 这个类，有一个叫 members的属性，就代表了我（UserModel)
+    # 一对多
+    department: Mapped[Optional["DepartmentModel"]] = relationship(
+        # 双向绑定的声明
+        back_populates="members",
+        # 用哪个外键来连接这两个表
+        foreign_keys=[department_id],
+        # 默认select：查出一个User时，不会立刻去查部门信息， 只有写了user.department.name才去查 -- 懒加载
+        # joined ：直接发出查询！立刻同步
+        lazy="joined",
+    )
+
+    # 多对多
+    managed_departments: Mapped[List["DepartmentModel"]] = relationship(
+        # 告诉sqlalchemy ：我们是多对多的，你去查user_department这张中间表
+        secondary=user_department,
+        back_populates="managing_hrs",
+    )
 
     # 好处是 自动匹配，自动加密
     def __init__(self, **kw):

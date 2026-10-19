@@ -2,8 +2,9 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from backend.settings import settings
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import DateTime, Integer, MetaData
+from sqlalchemy import BigInteger, DateTime, Integer, MetaData, String
 from datetime import datetime
+from shortuuid import uuid
 
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -51,12 +52,8 @@ class BaseTable(Base):
     # 我这个是抽象类，别给我真正建表哦！！！
     __abstract__ = True
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        comment="主键id",
-        sort_order=-1,
-        autoincrement=True,  # 自增
+    id: Mapped[str] = mapped_column(
+        String(100), primary_key=True, comment="主键ID", default=lambda: uuid()
     )
     create_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     update_at: Mapped[datetime] = mapped_column(

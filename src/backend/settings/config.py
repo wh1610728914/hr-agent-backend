@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int
 
     # 邀请码相关配置
-    INVITE_CODE_EXPIRE = 60 * 60 * 12 * 2
+    INVITE_CODE_EXPIRE: int = 60 * 60 * 12 * 2
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     # validation_alias 去读取MAIL_USERNAME作为MAIL_FROM的值

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-import aioredis
+import redis.asyncio as asioRedis
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi import HTTPException
@@ -33,10 +33,11 @@ async def manage_redis(app: FastAPI):
     并将其挂载至 FastAPI-Cache 作为缓存后端，确保应用关闭时自动释放连接资源
     """
 
-    redis = aioredis.from_url(
+    redis = asioRedis.from_url(
         f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
         encoding="utf-8",
-        descode_response=True,
+        protocol=2,  # 👈 关键：强制使用 RESP2，避免发送 HELLO 命令
+        # descode_response=True,
         # 让redis返回的数据自动解码为Python字符串（而不是字节）方便后续JSON序列化处理
     )
     # 截止到这里，只是创建了客户端对象，并没有真正建立TCP连接，Redis客户端通常是懒加载，第一次执行命令时才连
