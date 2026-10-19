@@ -1,6 +1,6 @@
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 class UserRepo(BaseRepo):
@@ -25,3 +25,26 @@ class UserRepo(BaseRepo):
             select(UserModel).where(UserModel.email == email)
         )
         return user
+
+    async def get_by_time(self, time_str: str):
+        """获取根据创建日期获取"""
+        res = await self.session.execute(
+            select(UserModel).where(UserModel.create_at >= time_str)
+        )
+        users = res.scalars().all()
+        return users
+
+    async def get_user_list(
+        self, page: int = 1, size: int = 10, department_id: str | None = None
+    ):
+        """获取用户列表"""
+        stmt = select(UserModel)
+        if department_id:
+            stmt = stmt.where(UserModel.department_id == department_id)
+        limit = size
+        offset = (page - 1) * size
+        stmt = stmt.limit(limit).offset(offset).order_by(UserModel.create_at.desc())
+
+        users = await self.session.scalars(stmt)
+
+        return users.all()

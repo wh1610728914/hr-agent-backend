@@ -1,5 +1,6 @@
 from backend.dependencies.user import get_cache_invite, get_super_user
 from backend.models.user import UserModel
+from backend.services.user import increaseDays7CandidatesService, getUserListService
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.schemas.user import InviteUserRequest
@@ -23,4 +24,23 @@ async def invite_user(
     当前登录的用户是超级用户才可以发送邀请码
     """
     res = await inviteCodeService(data, background_tasks, db, cache)
+    return Response.success(data=res)
+
+
+@router.get("/increaseDays", summary="获取7天内增加的候选人")
+async def getIncreaseDays7(db: AsyncSession = Depends(get_db)):
+    """获取指定时间内增加的候选人"""
+    res = await increaseDays7CandidatesService(db)
+    return Response.success(data=res)
+
+
+@router.get("/list", summary="获取用户总数据")
+async def getUserList(
+    page: int = 1,
+    size: int = 10,
+    department_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """获取指定时间内增加的候选人"""
+    res = await getUserListService(page, size, department_id, db)
     return Response.success(data=res)

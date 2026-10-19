@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from backend.models.user import UserStatus
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -27,3 +27,15 @@ class InviteUserRequest(BaseModel):
 
     email: EmailStr = Field(..., description="邮箱")
     department_id: str = Field(..., description="部门id")
+
+
+class IncreaseDays7Li(BaseModel):
+    create_at: datetime
+    count: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IncreaseDays7Response(BaseModel):
+    """获取7天内的候选人"""
+
+    list: List[IncreaseDays7Li]
