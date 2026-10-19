@@ -1,9 +1,11 @@
 import random
 import string
 
-from fastapi import BackgroundTasks
+from backend.dependencies.db import get_db
+from backend.dependencies.user import get_cache_invite
+from fastapi import BackgroundTasks, Depends
 
-from backend.schemas.auth import LoginRequest, LoginResponse
+from backend.schemas.auth import LoginRequest, LoginResponse, RegisterRequest
 from backend.schemas.user import InviteUserRequest, UserResponse
 from backend.core.exceptions import BusinessException
 from backend.core.token import AuthHandler
@@ -66,3 +68,34 @@ async def inviteCodeService(
         send_invite_email_task, str(invite_info.email), invite_code
     )
     return "发送成功"
+
+
+async def registerService(
+    data: RegisterRequest,
+    db: AsyncSession,
+    cache: HRCache,
+):
+    """注册"""
+    user_repo = UserRepo(db)
+    user = await user_repo.check_by_email(data.email)
+    print("*" * 20)
+    if user:
+        raise BusinessException(message="该邮箱已被ddd注册")
+
+    invite_info: InviteInfoSchema = await cache.get_invite_info(data.email)
+    if not invite_info:
+        raise BusinessException(message="该邮箱账号不存在")
+
+    if data.invite_code != invite_info.invite_code:
+        raise BusinessException(message="邀请码不正确，请重新输入")
+
+    await user_repo.create_user(
+        {
+            "email": data.email,
+            "username": data.username,
+            "realname": data.realname,
+            "password": data.password,
+            "department_id": invite_info.department_id,
+        }
+    )
+    return "注册成功"
