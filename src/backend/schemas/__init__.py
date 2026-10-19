@@ -20,15 +20,16 @@ class Response(BaseModel):
         return cls(code=code, message=message)
 
 
-T = TypeVar("T")  # 声明一个类型变量（占位符）
+# T = TypeVar("T")  # 声明一个类型变量（占位符）
 
 
 class PageResponse(
     BaseModel,
     # 我这个 PageResponse 类是一个泛型类，我内部会用到名叫 T 的占位符”。
-    Generic[T],
+    # Generic[T],
 ):
     """分页de统一响应格式"""
 
-    list: List[T] = []
+    list: Any = []
+    # list: List[T] = []
     total: int = 0

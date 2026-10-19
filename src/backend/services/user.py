@@ -25,4 +25,6 @@ async def getUserListService(
     # get_user_list
     user_repo = UserRepo(db)
     res = await user_repo.get_user_list(page, size, department_id)
-    return PageResponse[UserResponse](list=res, total=len(res))
+    return PageResponse(
+        total=len(res), list=[UserResponse.model_validate(item) for item in res]
+    )

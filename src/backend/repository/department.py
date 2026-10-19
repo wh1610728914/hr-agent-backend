@@ -26,3 +26,19 @@ class DepartmentRepo(BaseRepo):
             select(DepartmentModel).where(name == DepartmentModel.name)
         )
         return department
+
+    async def get_department_list(
+        self,
+        page: int = 1,
+        size: int = 10,
+    ):
+        """获取部门总列表"""
+        stmt = select(DepartmentModel)
+
+        limit = size
+        offset = (page - 1) * size
+        stmt = (
+            stmt.limit(limit).offset(offset).order_by(DepartmentModel.create_at.desc())
+        )
+        res = await self.session.scalars(stmt)
+        return res.all()
