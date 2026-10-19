@@ -1,7 +1,7 @@
 from typing import Optional
 
 from backend.db.database import BaseTable
-from backend.utils import password
+from backend.core import password
 from sqlalchemy import Boolean, String, Enum as SEnum
 from sqlalchemy.orm import Mapped, mapped_column
 import enum

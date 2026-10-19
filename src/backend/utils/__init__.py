@@ -1,1 +1,1 @@
-from .password import hash_password, verify_password
+# 应该只放纯函数、无状态、不依赖数据库/网络/配置的通用工具。

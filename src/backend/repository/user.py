@@ -14,7 +14,12 @@ class UserRepo(BaseRepo):
         await self.session.refresh(user)  # 此时事务还开着，refresh不会报错
         return user
 
-    async def login_email(self, email: str):
+    async def check_by_id(self, id: str):
+        """通过id校验"""
+        user = await self.session.scalar(select(User).where(User.id == id))
+        return user
+
+    async def check_by_id(self, email: str):
         """邮箱登录"""
         user = await self.session.scalar(select(User).where(User.email == email))
         return user

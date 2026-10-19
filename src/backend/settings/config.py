@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 # anyio异步库，这里只用来拼接，用异步简直太小题大做了
 # from anyio import Path
 from pathlib import Path
-from pydantic import computed_field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -13,15 +13,33 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
     # DBTABASE_URL: str | None = None
+    # 数据库配置
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_USER: str = "postgres"
     DB_PASSWORD: str = ""
     DB_NAME: str = "agent_hr"
 
+    # JWT配置
     JWT_SECRET_KEY: str
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRES_DAYS: int = 7
+
+    # redis配置
+    REDIS_HOST: str
+    REDIS_PORT: int
+
+    # 邀请码相关配置
+    INVITE_CODE_EXPIRE = 60 * 60 * 12 * 2
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    # validation_alias 去读取MAIL_USERNAME作为MAIL_FROM的值
+    MAIL_FROM: str = Field(..., validation_alias="MAIL_USERNAME")
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = "smtp.qq.com"
+    MAIL_FROM_NAME: str = "大真真"
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
 
     @computed_field
     @property

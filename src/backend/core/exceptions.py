@@ -1,6 +1,6 @@
 # 新增多个异常处理 == 统一 ===
 
-from backend.utils.response import Response
+from backend.schemas import Response
 
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError

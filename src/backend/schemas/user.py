@@ -20,3 +20,10 @@ class UserResponse(BaseModel):
     create_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InviteUserRequest(BaseModel):
+    """发送邀请码请求参数"""
+
+    email: EmailStr
+    department_id: str
