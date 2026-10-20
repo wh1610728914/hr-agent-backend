@@ -1,6 +1,11 @@
 from datetime import datetime, timedelta
+from backend.core.exceptions import BusinessException
 from backend.schemas import PageResponse
-from backend.schemas.user import IncreaseDays7Response, UserResponse
+from backend.schemas.user import (
+    IncreaseDays7Response,
+    UpdateUserStatusRequest,
+    UserResponse,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.repository.user import UserRepo
 
@@ -27,3 +32,16 @@ async def getUserListService(
     return PageResponse(
         total=len(res), list=[UserResponse.model_validate(item) for item in res]
     )
+
+
+async def updateUserStatusService(data: UpdateUserStatusRequest, db: AsyncSession):
+    """修改员工状态"""
+
+    user_repo = UserRepo(db)
+    user = await user_repo.check_by_id(data.user_id)
+    if not user:
+        raise BusinessException(message="该用户不存在")
+    if user.is_superuser:
+        raise BusinessException(message="不可修改超级用户的状态")
+    user.status = data.status
+    return "修改成功"

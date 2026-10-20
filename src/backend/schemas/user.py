@@ -41,3 +41,10 @@ class IncreaseDays7Response(BaseModel):
     """获取7天内的候选人"""
 
     list: List[IncreaseDays7Li]
+
+
+class UpdateUserStatusRequest(BaseModel):
+    """修改员工状态"""
+
+    user_id: str = Field(..., description="用户ID")
+    status: UserStatus = Field(..., description="员工状态")

@@ -1,9 +1,13 @@
 from backend.dependencies.user import get_cache_invite, get_super_user
 from backend.models.user import UserModel
-from backend.services.user import increaseDays7CandidatesService, getUserListService
+from backend.services.user import (
+    increaseDays7CandidatesService,
+    getUserListService,
+    updateUserStatusService,
+)
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.schemas.user import InviteUserRequest
+from backend.schemas.user import InviteUserRequest, UpdateUserStatusRequest
 from backend.core.cache import HRCache
 from backend.dependencies.db import get_db
 from backend.services.auth import inviteCodeService
@@ -44,4 +48,15 @@ async def getUserList(
 ):
     """获取员工列表"""
     res = await getUserListService(page, size, department_id, db)
+    return Response.success(data=res)
+
+
+@router.patch("/update/status", summary="修改员工状态")
+async def updateUserStatus(
+    data: UpdateUserStatusRequest,
+    db: AsyncSession = Depends(get_db),
+    _: UserModel = Depends(get_super_user),
+):
+    """修改员工状态"""
+    res = await updateUserStatusService(data, db)
     return Response.success(data=res)

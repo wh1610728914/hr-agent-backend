@@ -3,6 +3,7 @@ import string
 
 from backend.dependencies.db import get_db
 from backend.dependencies.user import get_cache_invite
+from backend.models.user import UserStatus
 from fastapi import BackgroundTasks, Depends
 
 from backend.schemas.auth import LoginRequest, LoginResponse, RegisterRequest
@@ -28,7 +29,8 @@ async def loginEmailService(
         raise BusinessException(message="该用户不存在")
     if not verify_password(data.password, user.password):
         raise BusinessException(message="邮箱或密码错误")
-
+    if user.status != UserStatus.ACTIVE:
+        raise BusinessException(message="该员工状态不可用，请联系管理员")
     # 获取token
     tokens = authToken.encode_login_token(user.id)
     resToken = {

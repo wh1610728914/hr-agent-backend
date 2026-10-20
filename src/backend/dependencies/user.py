@@ -1,7 +1,7 @@
 # 必须是superUser 才可以邀请
 from functools import lru_cache
 
-from backend.models.user import UserModel
+from backend.models.user import UserModel, UserStatus
 from backend.repository.user import UserRepo
 from backend.core.exceptions import BusinessException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,8 @@ async def get_current_user(
     user = await user_repo.check_by_id(user_id)
     if not user:
         raise BusinessException(message="该用户不存在")
+    if user.status != UserStatus.ACTIVE:
+        raise BusinessException(message="该员工状态不可用，请联系管理员")
     return user
 
 

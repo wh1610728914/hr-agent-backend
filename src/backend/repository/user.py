@@ -1,5 +1,6 @@
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
+from backend.schemas.user import UpdateUserStatusRequest
 from sqlalchemy import func, select
 
 
