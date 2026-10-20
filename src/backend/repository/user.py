@@ -1,9 +1,12 @@
 from backend.core.exceptions import BusinessException
+from backend.models.department import DepartmentModel
 from backend.models.ding import DingDingModel
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
-from backend.schemas.user import DingUserResponse, UpdateUserStatusRequest
-from sqlalchemy import func, select
+from backend.schemas.hr import AssignDepartmentRequest
+from backend.schemas.user import DingUserResponse
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 
 
 class UserRepo(BaseRepo):
@@ -76,3 +79,24 @@ class UserRepo(BaseRepo):
         if not info:
             raise BusinessException(message="无该用户信息")
         return info
+
+    async def assign_departs(self, data: AssignDepartmentRequest):
+        """给hr分配部门"""
+        hr_stmt = (
+            select(UserModel).where(UserModel.id == data.hr_id)
+            # options 告诉数据库，再帮我多拿点数据过来
+            .options(
+                # selectinload 用来预加载的，sqlalchemy默认的懒加载，
+                # 不加这个的话，是不会去查询managed_departments的，那么最后的赋值就会报错
+                selectinload(UserModel.managed_departments)
+            )
+        )
+        hr: UserModel = await self.session.scalar(hr_stmt)
+        if not hr:
+            raise BusinessException(message="该用户不存在")
+        department_stmt = select(DepartmentModel).where(
+            DepartmentModel.id.in_(data.department_ids)
+        )
+        departments = (await self.session.scalars(department_stmt)).all()
+        hr.managed_departments = departments
+        return departments

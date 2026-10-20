@@ -29,8 +29,8 @@ class DepartmentRepo(BaseRepo):
 
     async def get_department_list(
         self,
-        page: int,
-        size: int,
+        page: int = 1,
+        size: int = 10,
     ):
         """获取部门总列表"""
         stmt = select(DepartmentModel)
