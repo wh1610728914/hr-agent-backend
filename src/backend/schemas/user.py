@@ -50,10 +50,13 @@ class UpdateUserStatusRequest(BaseModel):
     status: UserStatus = Field(..., description="员工状态")
 
 
-class SetDingUserRequest(BaseModel):
-    """设置钉钉的用户信息"""
+class DingUserResponse(BaseModel):
+    """钉钉的用户信息"""
 
-    nick: str = Field(..., description="昵称")
-    union_id: str
-    open_id: str
-    mobile: str
+    id: str = Field(..., description="钉钉账号在自己服务器上的id")
+    nick: str = Field(..., description="在钉钉上昵称")
+    union_id: str = Field(..., description="在钉钉上union_id")
+    open_id: str = Field(..., description="在钉钉上open_id")
+    mobile: str = Field(..., description="在钉钉上mobile")
+    user_id: str = Field(..., description="在钉钉上的用户表的外键")
+    model_config = ConfigDict(from_attributes=True)

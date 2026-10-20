@@ -7,6 +7,7 @@ from backend.core.cache import DingTalkTokenInfoSchema, HRCache
 from backend.core.dingtalk import DingTalkApi
 from backend.core.exceptions import BusinessException
 from backend.repository.user import UserRepo
+from backend.services.ding import getDingInfoService
 from backend.settings import settings
 from backend.dependencies.db import get_db
 from backend.dependencies.user import get_cache_instance, get_current_user
@@ -114,3 +115,12 @@ async def dingtalk_success(nick: str, request: Request):
     return jinja2Engine.TemplateResponse(
         "ding.html", {"username": nick, "request": request}
     )
+
+
+@router.get("/info", summary="获取钉钉账号信息")
+async def get_ding_info(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await getDingInfoService(current_user.id, db)
+    return Response.success(data=res)

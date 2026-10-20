@@ -2,7 +2,7 @@ from backend.core.exceptions import BusinessException
 from backend.models.ding import DingDingModel
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
-from backend.schemas.user import UpdateUserStatusRequest
+from backend.schemas.user import DingUserResponse, UpdateUserStatusRequest
 from sqlalchemy import func, select
 
 
@@ -67,3 +67,12 @@ class UserRepo(BaseRepo):
             dingding_user = DingDingModel(**dingding_user_data, user_id=user_id)
             self.session.add(dingding_user)
         return dingding_user
+
+    async def get_ding_info(self, user_id: str) -> DingUserResponse | None:
+        """获取钉钉用户信息"""
+        info = await self.session.scalar(
+            select(DingDingModel).where(user_id == DingDingModel.user_id)
+        )
+        if not info:
+            raise BusinessException(message="无该用户信息")
+        return info
