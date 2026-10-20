@@ -34,13 +34,14 @@ async def getIncreaseDays7(db: AsyncSession = Depends(get_db)):
     return Response.success(data=res)
 
 
-@router.get("/list", summary="获取用户总数据")
+@router.get("/list", summary="获取员工列表")
 async def getUserList(
     page: int = 1,
     size: int = 10,
     department_id: str | None = None,
     db: AsyncSession = Depends(get_db),
+    _: UserModel = Depends(get_super_user),
 ):
-    """获取指定时间内增加的候选人"""
+    """获取员工列表"""
     res = await getUserListService(page, size, department_id, db)
     return Response.success(data=res)

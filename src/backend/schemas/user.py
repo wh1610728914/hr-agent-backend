@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from backend.models.user import UserStatus
+from backend.schemas.department import DepartmentResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -19,6 +20,7 @@ class UserResponse(BaseModel):
     is_superuser: bool = Field(..., description="是否超级用户")
     create_at: datetime = Field(..., description="创建时间")
 
+    department: DepartmentResponse = Field(..., description="所属部门")
     model_config = ConfigDict(from_attributes=True)
 
 

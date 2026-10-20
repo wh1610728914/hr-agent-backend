@@ -22,7 +22,6 @@ async def getUserListService(
     page: int, size: int, department_id: str | None, db: AsyncSession
 ):
     """获取用户列表"""
-    # get_user_list
     user_repo = UserRepo(db)
     res = await user_repo.get_user_list(page, size, department_id)
     return PageResponse(

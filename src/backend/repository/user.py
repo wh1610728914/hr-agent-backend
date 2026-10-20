@@ -34,9 +34,7 @@ class UserRepo(BaseRepo):
         users = res.scalars().all()
         return users
 
-    async def get_user_list(
-        self, page: int = 1, size: int = 10, department_id: str | None = None
-    ):
+    async def get_user_list(self, page: int, size: int, department_id: str | None):
         """获取用户列表"""
         stmt = select(UserModel)
         if department_id:
