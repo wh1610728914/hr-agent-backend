@@ -73,6 +73,13 @@ class UserModel(BaseTable):
         secondary=user_department,
         back_populates="managing_hrs",
     )
+    # 一对一
+    dingding_user: Mapped["DingDingModel"] = relationship(
+        back_populates="user",
+        # false 表示 返回的是 单个对象，而不是一个列表，通常适用于 一对一
+        uselist=False,
+        # 如果是True的话，表示返回的是一个列表，一对多
+    )
 
     # 好处是 自动匹配，自动加密
     def __init__(self, **kw):

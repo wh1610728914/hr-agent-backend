@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
 
+    # 钉钉配置
+    DING_CLIENT_ID: str
+    DING_CLIENT_SECRET: str
+
+    # 公网穿透(前后端域名)
+    BACKEND_BASE_URL: str
+
     @computed_field
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
