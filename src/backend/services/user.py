@@ -3,6 +3,7 @@ from backend.core.exceptions import BusinessException
 from backend.schemas import PageResponse
 from backend.schemas.user import (
     IncreaseDays7Response,
+    SetDingUserRequest,
     UpdateUserStatusRequest,
     UserResponse,
 )

@@ -43,6 +43,6 @@ def get_super_user(current_user: UserModel = Depends(get_current_user)):
 
 
 @lru_cache(maxsize=1)  # 单例
-def get_cache_invite():
-    """把邀请信息相关的也变成依赖进入"""
+def get_cache_instance():
+    """把redis相关的也变成依赖进入"""
     return HRCache()

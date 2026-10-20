@@ -2,7 +2,7 @@ import random
 import string
 
 from backend.dependencies.db import get_db
-from backend.dependencies.user import get_cache_invite
+from backend.dependencies.user import get_cache_instance
 from backend.models.user import UserStatus
 from fastapi import BackgroundTasks, Depends
 

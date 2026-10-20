@@ -1,6 +1,8 @@
 # 缓存
 
 
+from datetime import timedelta
+
 from backend.settings import settings
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_cache import FastAPICache
@@ -14,11 +16,20 @@ class InviteInfoSchema(BaseModel):
     invite_code: str
 
 
+class DingTalkTokenInfoSchema(BaseModel):
+    """dingding存储的"""
+
+    access_token: str
+    refresh_token: str
+    user_id: str
+
+
 # HRCache
 class HRCache:
     """管理HR邀请信息的缓存"""
 
     invite_prefix = "invite:"  # key前缀，用于命名空间隔离
+    dingding_prefix = "dings:"
 
     def __init__(self):
         # 获取lifespan中初始化的redis后端
@@ -40,7 +51,7 @@ class HRCache:
         """
         await self.cache_backend.delete(key)
 
-    # ================ 业务专属方法 ===================================
+    # ================ 邀请码业务专属方法 ===================================
     async def set_invite_info(self, invite_info: InviteInfoSchema):
         """存入邀请信息"""
         key = f"{self.invite_prefix}{invite_info.email}"
@@ -60,3 +71,20 @@ class HRCache:
             invite_info = InviteInfoSchema.model_validate_json(invite_info_json)
             return invite_info
         return None
+
+    # ================ 钉钉业务专属方法 ===================================
+    async def set_ding_info(self, dingtalk_info: DingTalkTokenInfoSchema):
+        key = f"{self.dingding_prefix}{dingtalk_info.user_id}"
+        expire_second = (
+            settings.JWT_REFRESH_TOKEN_EXPIRES - timedelta(days=1)
+        ).total_seconds()
+        await self.set(
+            key,
+            dingtalk_info.model_dump_json(),
+            # 和REFRESH_TOKEN的过期时间剪一天
+            ex=int(expire_second),
+        )
+
+    async def get_ding_info(self, user_id: str):
+        key = f"{self.dingding_prefix}{user_id}"
+        return await self.get(key)

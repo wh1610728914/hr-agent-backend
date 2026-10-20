@@ -1,3 +1,5 @@
+from backend.core.exceptions import BusinessException
+from backend.models.ding import DingDingModel
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
 from backend.schemas.user import UpdateUserStatusRequest
@@ -47,3 +49,21 @@ class UserRepo(BaseRepo):
         users = await self.session.scalars(stmt)
 
         return users.all()
+
+    async def set_dingding_user(self, user_id: str, dingding_user_data: dict):
+        """设置钉钉获得的user信息"""
+
+        user = self.check_by_id(user_id)
+        if not user:
+            raise BusinessException(message="设置钉钉的用户不存在")
+        dingding_user = await self.session.scalar(
+            select(DingDingModel).where(DingDingModel.user_id == user_id)
+        )
+        if dingding_user:
+            for key, value in dingding_user_data.items():
+                # 等价于 obj.key = value
+                setattr(dingding_user, key, value)
+        else:
+            dingding_user = DingDingModel(**dingding_user_data, user_id=user_id)
+            self.session.add(dingding_user)
+        return dingding_user

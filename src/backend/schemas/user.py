@@ -48,3 +48,12 @@ class UpdateUserStatusRequest(BaseModel):
 
     user_id: str = Field(..., description="用户ID")
     status: UserStatus = Field(..., description="员工状态")
+
+
+class SetDingUserRequest(BaseModel):
+    """设置钉钉的用户信息"""
+
+    nick: str = Field(..., description="昵称")
+    union_id: str
+    open_id: str
+    mobile: str

@@ -1,4 +1,4 @@
-from backend.dependencies.user import get_cache_invite, get_super_user
+from backend.dependencies.user import get_cache_instance, get_super_user
 from backend.models.user import UserModel
 from backend.services.user import (
     increaseDays7CandidatesService,
@@ -21,7 +21,7 @@ async def invite_user(
     data: InviteUserRequest,
     background_tasks: BackgroundTasks,  # 这就是告诉后台执行
     db: AsyncSession = Depends(get_db),  # 数据库
-    cache: HRCache = Depends(get_cache_invite),  # redis缓存
+    cache: HRCache = Depends(get_cache_instance),  # redis缓存
     _: UserModel = Depends(get_super_user),
 ):
     """

@@ -25,6 +25,7 @@ dependencies = [
     "fastapi-mail>=1.6.2",
     "loguru>=0.7.3",
     "shortuuid>=1.0.13",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

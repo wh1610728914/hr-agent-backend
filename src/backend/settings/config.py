@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # JWT配置
     JWT_SECRET_KEY: str
-    JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 30
+    JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 120
     JWT_REFRESH_TOKEN_EXPIRES_DAYS: int = 7
 
     # redis配置

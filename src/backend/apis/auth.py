@@ -1,7 +1,7 @@
 from backend.core.cache import HRCache
 from backend.dependencies.db import get_db
 from backend.dependencies.token import get_auth_handler
-from backend.dependencies.user import get_cache_invite
+from backend.dependencies.user import get_cache_instance
 from backend.schemas.auth import LoginRequest, RegisterRequest
 from backend.services.auth import loginEmailService, registerService
 from backend.core.token import AuthHandler
@@ -27,7 +27,7 @@ async def login(
 async def register(
     data: RegisterRequest,
     db: AsyncSession = Depends(get_db),
-    cache: HRCache = Depends(get_cache_invite),
+    cache: HRCache = Depends(get_cache_instance),
 ):
     """注册"""
     res = await registerService(data, db, cache)
