@@ -6,7 +6,7 @@ from backend.repository import BaseRepo
 from backend.schemas.hr import AssignDepartmentRequest
 from backend.schemas.user import DingUserResponse
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 class UserRepo(BaseRepo):
@@ -42,16 +42,30 @@ class UserRepo(BaseRepo):
 
     async def get_user_list(self, page: int, size: int, department_id: str | None):
         """获取用户列表"""
+        # 1.基础查询
         stmt = select(UserModel)
         if department_id:
             stmt = stmt.where(UserModel.department_id == department_id)
-        limit = size
+
+        # 2.计算总数
+        # with_only_columns 只保留这些列（sqlalchemy会拿到现有的stmt，去查询）-- 快捷方便
+        stmt_total = stmt.with_only_columns(
+            func.count(UserModel.id)
+            # order_by(None)在执行这个总数查询时，把所有的排序规则都给我清除掉，让它只专注于快速数数。
+        ).order_by(None)
+        total = await self.session.scalar(stmt_total)
+
+        # 3，分页越界拦截（性能保护）
         offset = (page - 1) * size
-        stmt = stmt.limit(limit).offset(offset).order_by(UserModel.create_at.desc())
+        if offset >= total:
+            return total, []
+
+        # 4.查当前页数据
+        stmt = stmt.limit(size).offset(offset).order_by(UserModel.create_at.desc())
 
         users = await self.session.scalars(stmt)
 
-        return users.all()
+        return total, users.all()
 
     async def set_dingding_user(self, user_id: str, dingding_user_data: dict):
         """设置钉钉获得的user信息"""
@@ -83,12 +97,14 @@ class UserRepo(BaseRepo):
     async def get_by_hr(self, page: int, size: int):
         """获取hr的总列表"""
         stmt = select(UserModel).where(UserModel.is_hr == True)
+        stmt_total = select(func.count(UserModel.id))
+        total = await self.session.scalar(stmt_total)
         limit = size
         offset = (page - 1) * size
         stmt = stmt.limit(limit).offset(offset).order_by(UserModel.create_at.desc())
         hr_list = (await self.session.scalars(stmt)).all()
 
-        return hr_list
+        return total, hr_list
 
     async def assign_departs(self, data: AssignDepartmentRequest):
         """给hr分配部门"""

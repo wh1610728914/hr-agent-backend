@@ -11,7 +11,7 @@ async def get_department_list_service(
 ):
     """获取部门列表"""
     depart_repo = DepartmentRepo(db)
-    res = await depart_repo.get_department_list(page, size)
+    total, res = await depart_repo.get_department_list(page, size)
     return PageResponse(
-        total=len(res), list=[DepartmentResponse.model_validate(item) for item in res]
+        total=total, list=[DepartmentResponse.model_validate(item) for item in res]
     )

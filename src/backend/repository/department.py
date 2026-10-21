@@ -1,6 +1,6 @@
 from backend.repository import BaseRepo
 from backend.models.department import DepartmentModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 class DepartmentRepo(BaseRepo):
@@ -34,11 +34,12 @@ class DepartmentRepo(BaseRepo):
     ):
         """获取部门总列表"""
         stmt = select(DepartmentModel)
-
+        stmt_total = select(func.count(DepartmentModel.id))
+        total = await self.session.scalar(stmt_total)
         limit = size
         offset = (page - 1) * size
         stmt = (
             stmt.limit(limit).offset(offset).order_by(DepartmentModel.create_at.desc())
         )
         res = await self.session.scalars(stmt)
-        return res.all()
+        return total, res.all()

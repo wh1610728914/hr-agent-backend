@@ -28,9 +28,9 @@ async def getUserListService(
 ):
     """获取用户列表"""
     user_repo = UserRepo(db)
-    res = await user_repo.get_user_list(page, size, department_id)
+    total, res = await user_repo.get_user_list(page, size, department_id)
     return PageResponse(
-        total=len(res), list=[UserResponse.model_validate(item) for item in res]
+        total=total, list=[UserResponse.model_validate(item) for item in res]
     )
 
 

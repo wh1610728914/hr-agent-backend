@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 async def getHrListService(page: int, size: int, db: AsyncSession):
     user_repo = UserRepo(db)
-    res = await user_repo.get_by_hr(page, size)
+    total, res = await user_repo.get_by_hr(page, size)
     return PageResponse(
-        total=len(res), list=[UserResponse.model_validate(item) for item in res]
+        total=total, list=[UserResponse.model_validate(item) for item in res]
     )
 
 
