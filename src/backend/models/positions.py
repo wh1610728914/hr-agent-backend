@@ -1,8 +1,9 @@
 from datetime import datetime
 import enum
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from backend.db.database import BaseTable
+
 from backend.models.department import DepartmentModel
 from backend.models.user import UserModel
 from pydantic import BaseModel
@@ -63,3 +64,4 @@ class PositionModel(BaseTable):
         # selectin 优化查询职位列表过慢情况，在主查询执行后，发出一条IN()的sql去批量加载关联数据
         lazy="selectin"
     )
+    candidates: Mapped[List["CandidateModel"]] = relationship(back_populates="position")

@@ -26,6 +26,11 @@ dependencies = [
     "loguru>=0.7.3",
     "shortuuid>=1.0.13",
     "httpx>=0.28.1",
+    "aiofiles>=25.1.0",
+    "pywin32>=312",
+    "pillow>=13.0.0",
+    "pymupdf>=2.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]

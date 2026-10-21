@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 from pathlib import Path
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -47,6 +48,9 @@ class Settings(BaseSettings):
 
     # 公网穿透(前后端域名)
     BACKEND_BASE_URL: str
+
+    # 文件简历上传存储路径
+    RESUME_DIR: str = os.path.join(BASE_DIR, "upload")
 
     @computed_field
     @property
