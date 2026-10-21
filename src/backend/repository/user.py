@@ -80,6 +80,16 @@ class UserRepo(BaseRepo):
             raise BusinessException(message="无该用户信息")
         return info
 
+    async def get_by_hr(self, page: int, size: int):
+        """获取hr的总列表"""
+        stmt = select(UserModel).where(UserModel.is_hr == True)
+        limit = size
+        offset = (page - 1) * size
+        stmt = stmt.limit(limit).offset(offset).order_by(UserModel.create_at.desc())
+        hr_list = (await self.session.scalars(stmt)).all()
+
+        return hr_list
+
     async def assign_departs(self, data: AssignDepartmentRequest):
         """给hr分配部门"""
         hr_stmt = (
