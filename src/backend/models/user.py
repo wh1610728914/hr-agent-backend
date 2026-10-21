@@ -67,7 +67,7 @@ class UserModel(BaseTable):
         lazy="joined",
     )
 
-    # 多对多
+    # 多对多 （hr负责的部门，一个hr可以负责多个部门）
     managed_departments: Mapped[List["DepartmentModel"]] = relationship(
         # 告诉sqlalchemy ：我们是多对多的，你去查user_department这张中间表
         secondary=user_department,

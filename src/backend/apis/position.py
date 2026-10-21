@@ -15,10 +15,11 @@ router = APIRouter(prefix="/position", tags=["职位"])
 async def get_position_list(
     page: int = 1,
     size: int = 10,
-    _: UserModel = Depends(get_super_user),
+    user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    res = await getPositionsListService(page, size, db)
+    """获取职位列表"""
+    res = await getPositionsListService(page, size, user, db)
     return Response.success(data=res)
 
 

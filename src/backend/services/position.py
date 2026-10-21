@@ -19,10 +19,12 @@ async def createPositionService(
     return PositionResponse.model_validate(res)
 
 
-async def getPositionsListService(page: int, size: int, db: AsyncSession):
+async def getPositionsListService(
+    page: int, size: int, user: UserModel, db: AsyncSession
+):
     """获取职位列表"""
     position_repo = PositionRepo(db)
-    total, items = await position_repo.get_position_list(page, size)
+    total, items = await position_repo.get_position_list(page, size, user)
     return PageResponse(
         total=total, list=[PositionResponse.model_validate(item) for item in items]
     )
