@@ -4,7 +4,11 @@ from backend.models.user import UserModel
 from backend.repository.position import PositionRepo
 from backend.schemas import Response
 from backend.schemas.position import PositionRequest
-from backend.services.position import getPositionsListService, createPositionService
+from backend.services.position import (
+    getPositionsListService,
+    createPositionService,
+    delPositionService,
+)
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,3 +37,15 @@ async def create_position_one(
 
     res = await createPositionService(data, current_user, db)
     return Response.success(data=res, message="添加成功")
+
+
+@router.delete("/del/{position_id}")
+async def del_position_one(
+    position_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: UserModel = Depends(get_current_user),
+):
+    """删除职位"""
+
+    res = await delPositionService(position_id, user, db)
+    return Response.success(data=res)

@@ -1,10 +1,13 @@
+from turtle import st
+
 from backend.core.exceptions import BusinessException
 from backend.models.positions import PositionModel
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 
+# 只做数据库的操作
 class PositionRepo(BaseRepo):
     async def create_position(self, data):
         """创建职位信息"""
@@ -48,3 +51,24 @@ class PositionRepo(BaseRepo):
         )
         positions = await self.session.scalars(stmt)
         return total, positions.all()
+
+    async def get_by_id(self, id: str):
+        """通过id获取对应的数据"""
+        stmt = select(PositionModel).where(PositionModel.id == id)
+        position = self.session.scalar(stmt)
+        return position
+
+    async def del_position(self, position_id: str):
+        """删除职位"""
+        # 拿到职位，删除
+        # stmt = select(PositionModel).where(PositionModel.id == data.id)
+        # position = await self.session.scalar(stmt)
+        # if not position:
+        #     raise BusinessException(message="该职位不存在")
+        # await self.session.delete(position)
+
+        # 或者更高效的写法
+        stmt = delete(PositionModel).where(PositionModel.id == position_id)
+        # execute 执行
+        result = await self.session.execute(stmt)
+        return result.rowcount
