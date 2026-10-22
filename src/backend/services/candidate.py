@@ -2,10 +2,12 @@ from pyclbr import Class
 from uuid import uuid4
 
 import aiofiles
+
 from backend.core.ocr import PaddleOcr
-from backend.repository.candidate import CandidateRepo
+from backend.repository.candidate import CandidateRepo, ResumeRepo
 from backend.schemas import Response
 from backend.schemas.candidate import (
+    CreateCandidateRequest,
     ResumeParseRequest,
     ResumeParseResponse,
     ResumeResponse,
@@ -64,7 +66,7 @@ async def upload_resume_service(file: UploadFile, user: UserModel, db: AsyncSess
             logger.error(f"word转pdf失败：{e}")
 
     # 4.存数据库
-    candidate_repo = CandidateRepo(db)
+    candidate_repo = ResumeRepo(db)
     res = await candidate_repo.upload_resume(file_path=save_path, uploader_id=user.id)
 
     return ResumeResponse.model_validate(res)
@@ -80,3 +82,15 @@ async def parse_resume_service(
         ocr_parse_resume_task, resume_id=data.resume_id, task_id=task_id
     )
     return ResumeParseResponse.model_validate({"task_id": task_id})
+
+
+async def create_candidate_service(
+    data: CreateCandidateRequest, user: UserModel, db: AsyncSession
+):
+    """创建候选人"""
+
+    candidate_repo = CandidateRepo(db)
+    # pydantic 转为字典
+    data_dict = data.model_dump()
+    res = await candidate_repo.create_candidate(user, data_dict)
+    return res

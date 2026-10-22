@@ -3,7 +3,7 @@ from backend.core.cache import HRCache, OCRInfoSchema
 from backend.core.ocr import PaddleOcr
 from backend.db.database import SessionLocal
 from backend.dependencies.user import get_cache_instance
-from backend.repository.candidate import CandidateRepo
+from backend.repository.candidate import ResumeRepo
 from backend.schemas.agents import ResumeAgentsResponse
 from loguru import logger
 
@@ -11,7 +11,7 @@ from loguru import logger
 async def ocr_parse_resume_task(resume_id: str, task_id: str):
     """简历解析任务"""
     async with SessionLocal() as db:
-        candidate_repo = CandidateRepo(db)
+        candidate_repo = ResumeRepo(db)
         res = await candidate_repo.by_get_id(resume_id)
         # print("对应的简历", res)
         file_path = res.file_path

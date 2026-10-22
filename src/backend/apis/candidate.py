@@ -3,15 +3,20 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.core.cache import HRCache, OCRInfoSchema
-from backend.schemas.candidate import ResumeParseRequest
+from backend.schemas.candidate import CreateCandidateRequest, ResumeParseRequest
 from backend.settings import settings
 from backend.core.ocr import PaddleOcr
 from backend.dependencies.db import get_db
 from backend.dependencies.user import get_cache_instance, get_current_user
 from backend.models.user import UserModel
 from backend.schemas import Response
-from backend.services.candidate import parse_resume_service, upload_resume_service
+from backend.services.candidate import (
+    create_candidate_service,
+    parse_resume_service,
+    upload_resume_service,
+)
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/candidate", tags=["候选人相关"])
@@ -77,3 +82,14 @@ async def ocr(
         res = await ocr.fetch_parsed_contents(jsonl_url)
         print(res)
         return Response.success(data=res)
+
+
+@router.post("/create", summary="添加候选人")
+async def create_candidate(
+    data: CreateCandidateRequest,
+    user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    logger.info("参数", data)
+    res = await create_candidate_service(data, user, db)
+    return Response.success(data=res)
