@@ -2,6 +2,7 @@
 
 
 from datetime import timedelta
+from typing import Any, Literal
 
 from backend.settings import settings
 from fastapi_cache.backends.redis import RedisBackend
@@ -11,8 +12,10 @@ from pydantic import BaseModel, EmailStr
 
 # redis缓存
 class InviteInfoSchema(BaseModel):
-    email: EmailStr
+    """邀请码"""
+
     department_id: str
+    email: EmailStr
     invite_code: str
 
 
@@ -24,12 +27,22 @@ class DingTalkTokenInfoSchema(BaseModel):
     user_id: str
 
 
+class OCRInfoSchema(BaseModel):
+    """ocr解析文档"""
+
+    task_id: str
+    status: Literal["pending", "done", "failed"]
+    error: str | None = None
+    res: dict[str, Any] | None = None
+
+
 # HRCache
 class HRCache:
     """管理HR邀请信息的缓存"""
 
     invite_prefix = "invite:"  # key前缀，用于命名空间隔离
     dingding_prefix = "dings:"
+    ocr_prefix = "orc:"
 
     def __init__(self):
         # 获取lifespan中初始化的redis后端
@@ -52,24 +65,19 @@ class HRCache:
         await self.cache_backend.delete(key)
 
     # ================ 邀请码业务专属方法 ===================================
-    async def set_invite_info(self, invite_info: InviteInfoSchema):
-        """存入邀请信息"""
+    async def set_invite_code(self, invite_info: InviteInfoSchema):
+        print("邀请码", invite_info)
+        """设置邀请码"""
         key = f"{self.invite_prefix}{invite_info.email}"
-        await self.set(
-            key,
-            # model_dump_json 把 pydantic对象序列化为json字符串
-            invite_info.model_dump_json(),
-            ex=settings.INVITE_CODE_EXPIRE,
-        )
+        expire_second = 60 * 60 * 12 * 30  # 一个月过期
+        await self.set(key, invite_info.model_dump_json(), ex=int(expire_second))
 
-    async def get_invite_info(self, email: str) -> InviteInfoSchema | None:
-        """获取邀请信息"""
+    async def get_invite_code(self, email: str):
+        """获取邀请码"""
         key = f"{self.invite_prefix}{email}"
-        invite_info_json = await self.get(key)
-        if invite_info_json is not None:
-            # model_validate_json 把json字符串反序列化并校验成pydantic对象
-            invite_info = InviteInfoSchema.model_validate_json(invite_info_json)
-            return invite_info
+        result = await self.get(key)
+        if result is not None:
+            return InviteInfoSchema.model_validate_json(result)
         return None
 
     # ================ 钉钉业务专属方法 ===================================
@@ -88,3 +96,18 @@ class HRCache:
     async def get_ding_info(self, user_id: str):
         key = f"{self.dingding_prefix}{user_id}"
         return await self.get(key)
+
+    # ================ ocr专属方法 ===================================
+    async def set_ocr_info(self, ocr_info: OCRInfoSchema):
+        key = f"{self.ocr_prefix}{ocr_info.task_id}"
+        expire_second = 60 * 60 * 1
+        # redis只能接收字符串
+        await self.set(key, ocr_info.model_dump_json(), ex=int(expire_second))
+
+    async def get_ocr_info(self, task_id: str):
+        """获取ocr内容"""
+        key = f"{self.ocr_prefix}{task_id}"
+        result = await self.get(key)
+        if result is not None:  # 拿到的json，json字符串变成对象
+            return OCRInfoSchema.model_validate_json(result)
+        return None

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # 文件简历上传存储路径
     RESUME_DIR: str = os.path.join(BASE_DIR, "upload")
 
+    # OCR 解析文档的token
+    OCR_ACCESS_TOKEN: str
+
     @computed_field
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:

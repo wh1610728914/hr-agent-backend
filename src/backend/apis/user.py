@@ -1,4 +1,8 @@
-from backend.dependencies.user import get_cache_instance, get_super_user
+from backend.dependencies.user import (
+    get_cache_instance,
+    get_current_user,
+    get_super_user,
+)
 from backend.models.user import UserModel
 from backend.services.user import (
     increaseDays7CandidatesService,
@@ -7,28 +11,16 @@ from backend.services.user import (
 )
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.schemas.user import InviteUserRequest, UpdateUserStatusRequest
+from backend.schemas.user import (
+    InviteCodeRequest,
+    UpdateUserStatusRequest,
+)
 from backend.core.cache import HRCache
 from backend.dependencies.db import get_db
-from backend.services.auth import inviteCodeService
+from backend.services.user import inviteCodeService
 from backend.schemas import Response
 
 router = APIRouter(prefix="/user", tags=["用户方面"])
-
-
-@router.post("/invite", summary="邀请用户", response_model=Response)
-async def invite_user(
-    data: InviteUserRequest,
-    background_tasks: BackgroundTasks,  # 这就是告诉后台执行
-    db: AsyncSession = Depends(get_db),  # 数据库
-    cache: HRCache = Depends(get_cache_instance),  # redis缓存
-    _: UserModel = Depends(get_super_user),
-):
-    """
-    当前登录的用户是超级用户才可以发送邀请码
-    """
-    res = await inviteCodeService(data, background_tasks, db, cache)
-    return Response.success(data=res)
 
 
 @router.get("/increaseDays", summary="获取7天内增加的候选人")
@@ -59,4 +51,17 @@ async def updateUserStatus(
 ):
     """修改员工状态"""
     res = await updateUserStatusService(data, db)
+    return Response.success(data=res)
+
+
+@router.post("/invitecode", summary="员工给新用户发送邀请码")
+async def sendInviteCode(
+    data: InviteCodeRequest,
+    background_tasks: BackgroundTasks,
+    user: UserModel = Depends(get_current_user),
+    _: UserModel = Depends(get_super_user),
+    db: AsyncSession = Depends(get_db),
+    cache: HRCache = Depends(get_cache_instance),
+):
+    res = await inviteCodeService(data, user, db, cache, background_tasks)
     return Response.success(data=res)

@@ -7,7 +7,7 @@ from backend.models.user import UserStatus
 from fastapi import BackgroundTasks, Depends
 
 from backend.schemas.auth import LoginRequest, LoginResponse, RegisterRequest
-from backend.schemas.user import InviteUserRequest, UserResponse
+from backend.schemas.user import UserResponse
 from backend.core.exceptions import BusinessException
 from backend.core.token import AuthHandler
 from backend.core.password import verify_password
@@ -16,7 +16,6 @@ from sqlalchemy import select
 from backend.repository.user import UserRepo
 from backend.repository.department import DepartmentRepo
 from backend.core.cache import HRCache, InviteInfoSchema
-from backend.tasks.email_task import send_invite_email_task
 
 
 async def loginEmailService(
@@ -41,37 +40,6 @@ async def loginEmailService(
     return LoginResponse(**resToken)
 
 
-async def inviteCodeService(
-    data: InviteUserRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession,
-    cache: HRCache,
-):
-    """发送邀请码"""
-    user_repo = UserRepo(db)
-    user = await user_repo.check_by_email(str(data.email))
-    if user:
-        raise BusinessException(message="该邮箱已被注册")
-
-    department_repo = DepartmentRepo(db)
-    department = await department_repo.get_by_id(data.department_id)
-    if not department:
-        raise BusinessException(message="该部门不存在")
-
-    # 生成6位数验证码
-    invite_code = "".join(random.sample(string.digits, 6))
-    # 存储到redis缓存中
-    invite_info = InviteInfoSchema(
-        email=data.email, department_id=data.department_id, invite_code=invite_code
-    )
-    await cache.set_invite_info(invite_info)
-    # 发送邮件
-    background_tasks.add_task(  # 告诉：后台去运行
-        send_invite_email_task, str(invite_info.email), invite_code
-    )
-    return "发送成功"
-
-
 async def registerService(
     data: RegisterRequest,
     db: AsyncSession,
@@ -82,9 +50,9 @@ async def registerService(
     user = await user_repo.check_by_email(data.email)
     print("*" * 20)
     if user:
-        raise BusinessException(message="该邮箱已被ddd注册")
+        raise BusinessException(message="该邮箱已被注册")
 
-    invite_info: InviteInfoSchema = await cache.get_invite_info(data.email)
+    invite_info: InviteInfoSchema = await cache.get_invite_code(data.email)
     if not invite_info:
         raise BusinessException(message="该邮箱账号不存在")
 

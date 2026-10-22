@@ -24,11 +24,11 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class InviteUserRequest(BaseModel):
-    """发送邀请码请求参数"""
+class InviteCodeRequest(BaseModel):
+    """发送邀请码给新用户"""
 
     email: EmailStr = Field(..., description="邮箱")
-    department_id: str = Field(..., description="部门id")
+    department_id: str = Field(..., description="员工发送邀请码时所属的部门")
 
 
 class IncreaseDays7Li(BaseModel):

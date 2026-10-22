@@ -10,3 +10,17 @@ class ResumeResponse(BaseModel):
     uploader: UserResponse = Field(..., description="上传者")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ResumeParseRequest(BaseModel):
+    """解析简历"""
+
+    resume_id: str = Field(..., description="简历ID")
+
+
+class ResumeParseResponse(BaseModel):
+    """解析简历"""
+
+    task_id: str = Field(..., description="任务ID")
+
+    model_config = ConfigDict(from_attributes=True)
