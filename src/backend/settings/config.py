@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # OCR 解析文档的token
     OCR_ACCESS_TOKEN: str
 
+    # 大模型配置
+    LLM_URL: str
+    LLM_QIAN_MODEL: str
+    # LLM_DEEPSEEK_MODEL: str
+
     @computed_field
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:

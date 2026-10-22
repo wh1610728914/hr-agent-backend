@@ -46,7 +46,7 @@ async def parse_resume(
 @router.get(
     "/resume/parse/{task_id}",
     summary="根据task_id获取任务解析内容",
-    response_model=OCRInfoSchema,
+    response_model=Response,
 )
 async def get_parse_resume(
     task_id: str,
@@ -57,7 +57,7 @@ async def get_parse_resume(
     res: OCRInfoSchema = await cache.get_ocr_info(task_id)
     if res is None:
         await asyncio.sleep(2)
-    return Response.success(data=res, message="解析成功")
+    return Response.success(data=res)
 
 
 @router.get("/resume/ocr/test", summary="ocr测试")

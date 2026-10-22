@@ -31,6 +31,8 @@ dependencies = [
     "pillow>=13.0.0",
     "pymupdf>=2.0",
     "python-multipart>=0.0.32",
+    "langchain>=1.4.7",
+    "langchain-openai>=1.7.2",
 ]
 
 [project.scripts]

@@ -4,36 +4,18 @@
 from datetime import timedelta
 from typing import Any, Literal
 
+from backend.schemas.agents import ResumeAgentsResponse
+from backend.schemas.cache import (
+    DingTalkTokenInfoSchema,
+    InviteInfoSchema,
+    OCRInfoSchema,
+)
 from backend.settings import settings
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_cache import FastAPICache
 from pydantic import BaseModel, EmailStr
 
-
 # redis缓存
-class InviteInfoSchema(BaseModel):
-    """邀请码"""
-
-    department_id: str
-    email: EmailStr
-    invite_code: str
-
-
-class DingTalkTokenInfoSchema(BaseModel):
-    """dingding存储的"""
-
-    access_token: str
-    refresh_token: str
-    user_id: str
-
-
-class OCRInfoSchema(BaseModel):
-    """ocr解析文档"""
-
-    task_id: str
-    status: Literal["pending", "done", "failed"]
-    error: str | None = None
-    res: dict[str, Any] | None = None
 
 
 # HRCache
