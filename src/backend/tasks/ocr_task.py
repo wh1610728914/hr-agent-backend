@@ -1,4 +1,4 @@
-from backend.agents.resume import extract_candidate_info
+from backend.agents.resumes import extract_candidate_info
 from backend.core.cache import HRCache, OCRInfoSchema
 from backend.core.ocr import PaddleOcr
 from backend.db.database import SessionLocal

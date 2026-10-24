@@ -24,6 +24,10 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserSchema(UserResponse):
+    pass
+
+
 class InviteCodeRequest(BaseModel):
     """发送邀请码给新用户"""
 

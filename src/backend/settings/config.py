@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"
     DB_PASSWORD: str = ""
     DB_NAME: str = "agent_hr"
-
+    DB_AGENT_NAME: str = "agent_hr_candidate"
     # JWT配置
     JWT_SECRET_KEY: str
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 120
@@ -80,6 +80,17 @@ class Settings(BaseSettings):
         # SQLAlchemy 解析会出错。在拼接时加一层转义
         escaped_password = quote_plus(self.DB_PASSWORD)
         return f"postgresql+psycopg://{self.DB_USER}:{escaped_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    # 动态拼接计算字段
+    @computed_field  # 这一行必须在property上面
+    # 让函数看起来像变量来用
+    @property
+    def DATABASE_AGENT_URL(self) -> str:
+        """类型注解 -> str 必须存在，不能省略"""
+        # 若密码是p@ssword，直接拼接会变成 ...://user:p@ssword@host...
+        # SQLAlchemy 解析会出错。在拼接时加一层转义
+        escaped_password = quote_plus(self.DB_PASSWORD)
+        return f"postgresql+psycopg://{self.DB_USER}:{escaped_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_AGENT_NAME}"
 
     # 告诉pydantic去哪里去读.env文件
     model_config = SettingsConfigDict(

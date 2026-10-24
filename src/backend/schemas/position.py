@@ -25,6 +25,10 @@ class PositionRequest(BaseModel):
     work_year: int = Field(0, description="最低工作年限")
 
 
+class PositionSchema(PositionRequest):
+    pass
+
+
 class PositionResponse(PositionRequest):
     """职位信息返回"""
 
