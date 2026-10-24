@@ -4,10 +4,15 @@
 
 from typing import Annotated, List
 
+from backend.core.exceptions import BusinessException
+from backend.db.database import SessionLocal
+from backend.models.candidate import CandidateStatusEnum
+from backend.repository.candidate import CandidateRepo
 from backend.settings import settings
 from backend.schemas.candidate import CandidateSchema
 from backend.schemas.position import PositionSchema
 from backend.schemas.user import UserSchema
+from langgraph.prebuilt import ToolRuntime
 
 
 from .llms import model
@@ -15,39 +20,20 @@ from langchain.agents import create_agent, AgentState
 from langgraph.graph.message import BaseMessage
 from langchain.agents.middleware import SummarizationMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from .prompts import (
+    CANDIDATE_PROCESS_SYSTEM_PROMPT,
+    SCORE_FOR_CANDIDATE_SYSTEM_PROMPT,
+    SCORE_FOR_CANDIDATE_USER_PROMPT,
+)
+from langchain.tools import tool
+from backend.schemas.candidate import CandidateAIScopeSchema
+from langchain.messages import HumanMessage
+from langchain_core.prompts import PromptTemplate
 
-CANDIDATE_PROCESS_SYSTEM_PROMPT = """
-你是一个非常专业的HR招聘小助手，会严格按照以下步骤来招聘候选人：
-1. 我会把候选人和职位信息发送给你，你首先要给这个候选人进行评分。
-2. 如果候选人整体得分超过8分，那么这个候选人就合适，要给这个候选人发送邮件确定面试时间。如果得分低于8分，那么就不予考虑。
-
-3. 但是如果该候选人状态被人工修改为AI筛选通过，并且还没有确定面试时间，那么你还是要发送邮件跟这个候选人确定面试时间。
-
-4. 发送完邮件后，你就可以退出了。直到我把候选人的邮件回复内容发给你，你再决定下一步操作。
-5. 如果候选人回复内容为“确定”面试时间，那么你就可以确定面试时间了，整个任务你就完成了。
-6. 但是如果候选人回复了新的面试时间，那么你要先判断面试官在该时间内是否空闲，如果空闲，那么就可以确定面试时间了。
-7. 如果候选人回复的新的面试时间，面试官不空闲，那么你要告诉候选人，面试官在该时间内不空闲，请候选人重新选择面试时间。
-8. 重复5、6、7步骤，直到和候选人确定了面试时间，或者候选人明确拒绝了面试，整个任务就结束了。
-8. 如果候选人回复的邮件中包含“拒绝”，那么你要修改候选人的状态为拒绝，整个任务你就完成了。
-
-工具描述：
-- get_current_time：如果涉及到相对时间时，比如昨天、明天、后天、下周三等，那么要先调用这个工具获取当前时间，再推测目标时间。
-- score_for_candidate：给候选人进行评分。
-- get_interviewer_available_slot：获取面试官的空闲时间。
-- send_interview_email：给候选人发送邮件，邀请候选人面试。
-- confirm_interview_time：如果候选人同意了面试时间，那么调用该工具来确定面试时间。
-- refuse_interview：如果候选人拒绝了面试，那么调用该工具来更新候选人状态为已拒绝。
-调用了工具后，务必等到工具执行完成后再停止运行。
-
-其他：
-- 如果收到和确定面试时间无关的邮件，不予以理会。
-"""
 
 # 候选人 -》 ai评分 -》 评分 大于 8分 -》 llm发邮件 ->邀请面试预约
 #                                                  此刻在面试表中插入一条预约记录 -》 给面试官在钉钉上发面试安排
 # 给大模型传 候选人和职位信息
-
-
 def keep_old(left, right):
     """有就用新值，没有就用旧值"""
     return right if right is not None else left
@@ -58,6 +44,60 @@ class CandidateAgentState(AgentState):
     candidate: Annotated[CandidateSchema, keep_old] = None
     position: Annotated[PositionSchema, keep_old] = None
     interview: Annotated[UserSchema, keep_old] = None
+
+
+_score_agent = create_agent(
+    model=model,
+    system_prompt=SCORE_FOR_CANDIDATE_SYSTEM_PROMPT,
+    response_format=CandidateAIScopeSchema,
+)
+
+
+# 工具
+@tool
+async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
+    """给候选人进行评分"""
+    agent = _score_agent
+    state = runtime.state
+    candidate = state["candidate"]
+    position = state["position"]
+    if not candidate or not position:
+        raise BusinessException(message="缺少候选人或者职位信息")
+    # 解析SCORE_FOR_CANDIDATE_USER_PROMPT里面的变量 用PromptTemplate
+    user_prompt_template = PromptTemplate(SCORE_FOR_CANDIDATE_USER_PROMPT)
+    # invoke 可以把传入的json
+    user_prompt = user_prompt_template.invoke(
+        {
+            "candidate": candidate.model_dump_json(),
+            "position": position.model_dump_json(),
+        }
+    )
+    res = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+    candidate_scope: CandidateAIScopeSchema = res["structured_response"]
+    candidate_id = candidate.id
+    # 插到数据库里面，连数据库，手动连
+    async with SessionLocal() as db:
+        async with db.begin():
+            try:
+                candidate_Repo = CandidateRepo(db)
+
+                await candidate_Repo.create_ai_scope(
+                    candidate_id=candidate_id,
+                    candidate_scope_dict=candidate_scope.model_dump(),
+                )
+                # 判断overall_score得分情况，大于8分的，修改状态为AI_FILTER_PASSED 否则 AI_FILTER_FAILED
+                if candidate_scope.overall_score > 8:
+                    await candidate_Repo.update_candidate_status(
+                        candidate_id, CandidateStatusEnum.AI_FILTER_PASSED
+                    )
+                else:
+                    await candidate_Repo.update_candidate_status(
+                        candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
+                    )
+            except Exception as e:
+                return f"得分工具执行失败，错误：{e}"
+
+    return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
 
 
 # 此agent 要评分，判断，发邮件，插入面试邀请，给面试管发送信息
@@ -80,7 +120,7 @@ class CandidateProcessAgent:
     async def ainvoke(self, thread_id: str, messages: List[BaseMessage]):
         agent = create_agent(
             model=model,
-            tools=[],
+            tools=[score_for_candidate],
             system_prompt=CANDIDATE_PROCESS_SYSTEM_PROMPT,
             middleware=[
                 SummarizationMiddleware(
@@ -91,10 +131,19 @@ class CandidateProcessAgent:
                 )
             ],
             checkpointer=self._checkpointer,
+            #
             state_schema=CandidateAgentState,
         )
         config = {"configurable": {"thread_id": thread_id}}
-        await agent.ainvoke({"messages": messages}, config=config)
+        await agent.ainvoke(
+            {
+                "messages": messages,
+                "candidate": self.candiadate,
+                "position": self.position,
+                "interview": self.interview,
+            },
+            config=config,
+        )
 
     # 要想变成 异步上下文管理的话，就得加下面两个方法
     async def __aenter__(self):

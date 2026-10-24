@@ -1,5 +1,5 @@
 from backend.core.exceptions import BusinessException
-from backend.models.candidate import CandidateModel, ResumeModel
+from backend.models.candidate import CandidateAIScoreModel, CandidateModel, ResumeModel
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
 from backend.schemas.candidate import CreateCandidateRequest
@@ -38,3 +38,27 @@ class CandidateRepo(BaseRepo):
         await self.session.flush()
         await self.session.refresh(candidateInfo)
         return "创建成功"
+
+    async def create_ai_scope(self, id, data):
+        """创建ai得分"""
+        aiScopeInfo = CandidateAIScoreModel(candidate_id=id, **data)
+        self.session.add(aiScopeInfo)
+        await self.session.flush()
+        await self.session.refresh(aiScopeInfo)
+        return "创建成功"
+
+    async def by_get_id(self, id):
+        """通过id获取候选人"""
+        candidate = await self.session.scalar(
+            select(CandidateModel).where(id == CandidateModel.id)
+        )
+        if not candidate:
+            raise BusinessException(message="对应的候选人不存在")
+
+        return candidate
+
+    async def update_candidate_status(self, id, val):
+        """修改候选人状态"""
+        candidate = await self.by_get_id(id)
+        candidate.status = val
+        return "修改成功"

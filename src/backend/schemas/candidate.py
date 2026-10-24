@@ -76,3 +76,19 @@ class CandidateSchema(BaseModel):
     creator: UserSchema = Field(..., description="创建该候选人的员工信息")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateAIScopeSchema(BaseModel):
+    """候选人ai评分后返回的格式"""
+
+    work_experience_score: int = Field(..., description="工作经验得分")
+    technical_skills_score: int = Field(..., description="技术能力得分")
+    soft_skills_score: int = Field(..., description="软技能得分")
+    educational_background_score: int = Field(..., description="教育背景得分")
+    project_experience_score: int = Field(..., description="项目经验得分")
+    overall_score: int = Field(..., description="综合总分(各维度加权/汇总)")
+    summary: str = Field(..., description="综合评价摘要")
+    strengths: list[str] = Field(..., description="优势(JSON 字符串数组)")
+    weaknesses: list[str] = Field(..., description="劣势/待改进点(JSON 字符串数组)")
+
+    model_config = ConfigDict(from_attributes=True)
