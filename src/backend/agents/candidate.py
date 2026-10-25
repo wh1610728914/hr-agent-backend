@@ -6,9 +6,11 @@ from datetime import datetime
 from typing import Annotated, List
 
 from backend.core.dingtalk import DingTalkApi
+from backend.core.emailBot.bot import EmailBot
 from backend.core.exceptions import BusinessException
 from backend.db.database import SessionLocal
 from backend.dependencies.user import get_cache_instance
+from backend.emailBot.settings import EmailBotSetting
 from backend.models.candidate import CandidateStatusEnum
 from backend.models.ding import DingDingModel
 from backend.repository.candidate import CandidateRepo
@@ -217,6 +219,41 @@ async def send_interview_email(
     """给候选人发送面试的邮件
     interview_datetime:面试时间
     """
+    botObj = EmailBotSetting(
+        imap_host=settings.IMAP_HOST,
+        smtp_host=settings.SMTP_HOST,
+        email=settings.EMAIL_USERNAME,
+        password=settings.EMAIL_PASSWORD,
+    )
+    state: CandidateAgentState = runtime.state
+    candidate = state["candidate"]
+    position: PositionSchema = state["position"]
+    async with EmailBot(botObj) as bot:
+        to = candidate.email
+        subject = "美味味道【面试邀请】"
+        text = f"""
+                您好！感谢您对我们{position.title}岗位的关注。经初步沟通，我们诚挚邀请您参加面试：
+                    面试时间：{interview_datetime}
+                    面试方式：线下面试
+                    预计时长：30分钟
+                    如上述时间与您安排有冲突，请随时回复本消息告知我，我们可以为您协调其他合适的时间，无需勉强。
+                    期待您的回复，祝好！
+            """
+        html = f"""
+                    您好！感谢您对我们岗位的关注。经初步沟通，我们诚挚邀请您参加面试：<br/>
+                    面试时间：{interview_datetime}  <br/>
+                    面试方式：线下面试 <br/>
+                    预计时长：30分钟 <br/>
+                    如上述时间与您安排有冲突，请随时回复本消息告知我，我们可以为您协调其他合适的时间，无需勉强。<br/>
+                    期待您的回复，祝好！
+        """
+        try:
+            await bot.send_email(to=to, subject=subject, text=text, html=html)
+        except Exception as e:
+            logger.warning(e)
+            return f"给候选人发送邮件失败:{e}"
+
+        return f"给候选人发送面试邮件成功！面试时间初步确认为:{interview_datetime}"
 
 
 # 此agent 要评分，判断，发邮件，插入面试邀请，给面试管发送信息
@@ -239,7 +276,7 @@ class CandidateProcessAgent:
     async def ainvoke(self, thread_id: str, messages: List[BaseMessage]):
         agent = create_agent(
             model=model,
-            tools=[score_for_candidate],
+            tools=[score_for_candidate, send_interview_email],
             system_prompt=CANDIDATE_PROCESS_SYSTEM_PROMPT,
             middleware=[
                 SummarizationMiddleware(

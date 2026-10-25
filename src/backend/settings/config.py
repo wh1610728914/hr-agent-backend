@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     LLM_QIAN_MODEL: str
     # LLM_DEEPSEEK_MODEL: str
 
+    # 邮箱机器人配置
+    IMAP_HOST: str = "imap.qq.com"
+    SMTP_HOST: str = Field(..., validation_alias="MAIL_SERVER")
+    EMAIL_USERNAME: str = Field(..., validation_alias="MAIL_USERNAME")
+    EMAIL_PASSWORD: str = Field(..., validation_alias="MAIL_PASSWORD")
+
     @computed_field
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
