@@ -4,6 +4,7 @@
 
 from datetime import datetime
 from typing import Annotated, List
+from zoneinfo import ZoneInfo
 
 from backend.core.dingtalk import DingTalkApi
 from backend.core.emailBot.bot import EmailBot
@@ -267,6 +268,21 @@ async def refuse_interview(runtime: ToolRuntime[CandidateAgentState]):
         return f"已成功将候选人状态更新为：已拒绝面试"
     except Exception as e:
         return f"调用拒绝面试工具失败，错误是:{e}"
+
+
+@tool
+async def get_current_time():
+    """获取当前时间：年月日，时分秒，星期几，当前第几天"""
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+    weekday = weekdays[now.weekday()]
+    day = now.day
+
+    return (
+        f"{now.year}年{now.month}月{now.day}日"
+        f"{now.hour:02d}{now.minute:02d}{now.second:02d}"
+        f"{weekday}(本月第{day}天)"
+    )
 
 
 # 此agent 要评分，判断，发邮件，插入面试邀请，给面试管发送信息
