@@ -90,8 +90,8 @@ class UserRepo(BaseRepo):
         info = await self.session.scalar(
             select(DingDingModel).where(user_id == DingDingModel.user_id)
         )
-        if not info:
-            raise BusinessException(message="无该用户信息")
+        # if not info:
+        #     raise BusinessException(message="无该用户信息")
         return info
 
     async def get_by_hr(self, page: int, size: int):

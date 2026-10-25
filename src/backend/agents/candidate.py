@@ -2,17 +2,28 @@
 # 拿到候选人和职业信息后，对候选人进行评分，给面试官进行面试安排
 
 
+from datetime import datetime
 from typing import Annotated, List
 
+from backend.core.dingtalk import DingTalkApi
 from backend.core.exceptions import BusinessException
 from backend.db.database import SessionLocal
+from backend.dependencies.user import get_cache_instance
 from backend.models.candidate import CandidateStatusEnum
+from backend.models.ding import DingDingModel
 from backend.repository.candidate import CandidateRepo
+from backend.repository.user import UserRepo
+from backend.schemas.cache import DingTalkTokenInfoSchema
 from backend.settings import settings
 from backend.schemas.candidate import CandidateSchema
 from backend.schemas.position import PositionSchema
 from backend.schemas.user import UserSchema
+from backend.utils.date import iso_to_dt
+from backend.utils.datetime import find_free_slot, get_future_time
+from backend.utils.datetime import dt_to_iso
+import httpx
 from langgraph.prebuilt import ToolRuntime
+from loguru import logger
 
 
 from .llms import model
@@ -62,23 +73,25 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
     candidate = state["candidate"]
     position = state["position"]
     if not candidate or not position:
-        raise BusinessException(message="缺少候选人或者职位信息")
-    # 解析SCORE_FOR_CANDIDATE_USER_PROMPT里面的变量 用PromptTemplate
-    user_prompt_template = PromptTemplate(SCORE_FOR_CANDIDATE_USER_PROMPT)
-    # invoke 可以把传入的json
-    user_prompt = user_prompt_template.invoke(
-        {
-            "candidate": candidate.model_dump_json(),
-            "position": position.model_dump_json(),
-        }
-    )
-    res = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
-    candidate_scope: CandidateAIScopeSchema = res["structured_response"]
-    candidate_id = candidate.id
-    # 插到数据库里面，连数据库，手动连
-    async with SessionLocal() as db:
-        async with db.begin():
-            try:
+        return "缺少候选人或者职位信息"
+
+    try:
+        # 解析SCORE_FOR_CANDIDATE_USER_PROMPT里面的变量 用PromptTemplate
+        user_prompt_template = PromptTemplate(SCORE_FOR_CANDIDATE_USER_PROMPT)
+        # invoke 可以把传入的json
+        user_prompt = user_prompt_template.invoke(
+            {
+                "candidate": candidate.model_dump_json(),
+                "position": position.model_dump_json(),
+            }
+        )
+        res = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+        candidate_scope: CandidateAIScopeSchema = res["structured_response"]
+        candidate_id = candidate.id
+        # 插到数据库里面，连数据库，手动连
+        async with SessionLocal() as db:
+            async with db.begin():
+
                 candidate_Repo = CandidateRepo(db)
 
                 await candidate_Repo.create_ai_scope(
@@ -94,10 +107,116 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
                     await candidate_Repo.update_candidate_status(
                         candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
                     )
-            except Exception as e:
-                return f"得分工具执行失败，错误：{e}"
 
-    return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
+        return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
+
+    except Exception as e:
+        return f"得分工具执行失败，错误：{e}"
+
+
+# # 获取钉钉的accesstoken，如果过期的话，用refresh_token进行更新就好！
+# async def get_ding_access_token(user_id:str) -> str:
+#     """获取钉钉的accesstoken"""
+
+
+@tool
+async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentState]):
+    """获取面试官空余时间"""
+    # 1.拿到面试官数据和钉钉数据
+    interview_id = runtime.state["interview"].id
+
+    union_id: str | None = None
+
+    # 1.获取钉钉账户
+    async with SessionLocal() as db:
+        async with db.begin():
+            try:
+                user_repo = UserRepo(db)
+                ding_user_info: DingDingModel = user_repo.get_ding_info(interview_id)
+
+                if not ding_user_info:
+                    return "获取候选人可用时间失败，该用户没有注册钉钉"
+                union_id = ding_user_info.union_id
+            except Exception as e:
+                return f"获取候选人可用时间失败，错误：{e}"
+
+    # 2.获取钉钉的请求头需要的 access_token
+    cache = get_cache_instance()
+    ding_tokens: DingTalkTokenInfoSchema = cache.get_ding_info(interview_id)
+    if not ding_tokens:
+        return "钉钉 access_token 缺失，请重新授权 "
+    calendar_url = DingTalkApi.build_calendar_list_url(union_id)
+    timeMin = dt_to_iso(get_future_time(9))
+    timeMax = dt_to_iso(get_future_time(9, 7))
+
+    async def _fetch_events(access_token: str):
+        """返回 (status_code, data)；网络异常直接抛"""
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                calendar_url,
+                params={"timeMin": timeMin, "timeMax": timeMax},
+                headers={"x-acs-dingtalk-access-token": access_token},
+            )
+            return res
+
+    try:
+        res = await _fetch_events(ding_tokens.access_token)
+        if res.status_code in (401, 403):
+            logger.warning("access_token 失效，尝试刷新 interview_id=%s", interview_id)
+            new_refresh_token, new_access_token = (
+                await DingTalkApi.refresh_access_token(ding_tokens.refresh_token)
+            )
+            # 重新写回缓存
+            await cache.set_ding_info(
+                DingTalkTokenInfoSchema(
+                    access_token=new_access_token,
+                    refresh_token=new_refresh_token,
+                    user_id=interview_id,
+                )
+            )
+            ding_tokens = cache.get_ding_info(user_id=interview_id)
+            res = await _fetch_events(new_access_token)
+        res.raise_for_status()
+        data = res.json()
+    except Exception as e:
+        logger.exception("调用钉钉日历接口失败 interview_id=%s", interview_id)
+        return f"获取面试官空余时间失败，钉钉接口错误：{e}"
+
+    # 4.计算空余时间
+    events = data.get("events") or []
+    if not events:
+        return f"该时间段全部空闲：{timeMin} ~ {timeMax}"
+    try:
+
+        time_list = [
+            (
+                iso_to_dt(event["start"]["dateTime"]),
+                iso_to_dt(event["end"]["dateTime"]),
+            )
+            for event in events
+        ]
+        free_slot = find_free_slot(
+            start_time=iso_to_dt(timeMin),
+            end_time=iso_to_dt(timeMax),
+            existing_events=time_list,
+        )
+    except Exception as e:
+        logger.exception("解析钉钉日历事件失败 interview_id=%s", interview_id)
+        return f"解析日历事件失败：{e}"
+    if free_slot:
+        s, e = free_slot
+        return f"找到空余时间了：{s:%Y-%m-%d %H:%M} ~ {e:%Y-%m-%d %H:%M}"
+
+    return f"没有空余时间"
+
+
+@tool
+async def send_interview_email(
+    interview_datetime: str, runtime: ToolRuntime[CandidateAgentState]
+):
+    """给候选人发送面试的邮件
+    interview_datetime:面试时间
+    """
 
 
 # 此agent 要评分，判断，发邮件，插入面试邀请，给面试管发送信息

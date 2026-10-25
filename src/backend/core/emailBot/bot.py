@@ -5,10 +5,11 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 import smtplib
 
-from backend.emailBot.imap_client import ImapMail
-from backend.emailBot.models import ParsedEmail
-from backend.emailBot.parser import parse_email
-from backend.emailBot.settings import EmailBotSetting
+from backend.core.emailBot.imap_client import ImapMail
+from backend.core.emailBot.models import ParsedEmail
+from backend.core.emailBot.parser import parse_email
+from backend.core.emailBot.settings import EmailBotSetting
+from backend.core.emailBot.smtp_client import SmtpMail
 from loguru import logger
 
 
@@ -19,7 +20,7 @@ class EmailBot:
         self._imap = ImapMail(
             host=settings.imap_host, port=settings.imap_port, ssl=settings.imap_ssl
         )
-        self._smtp = ImapMail(
+        self._smtp = SmtpMail(
             host=settings.smtp_host,
             port=settings.smtp_port,
             starttls=settings.smtp_starttls,
