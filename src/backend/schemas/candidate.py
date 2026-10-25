@@ -1,6 +1,6 @@
 from typing import Optional
 
-from backend.models.candidate import GenderEnum
+from backend.models.candidate import CandidateStatusEnum, GenderEnum
 from backend.schemas.position import PositionResponse, PositionSchema
 from backend.schemas.user import UserResponse, UserSchema
 from pydantic import BaseModel, ConfigDict, Field
@@ -70,7 +70,9 @@ class CandidateSchema(BaseModel):
     self_evaluation: Optional[str] = Field(None, description="候选人自我评价")
     other_information: Optional[str] = Field(None, description="候选人其他信息")
     skills: Optional[str] = Field(None, description="候选人技能")
-
+    status: CandidateStatusEnum = Field(
+        CandidateStatusEnum.APPLICATION, description="候选人状态"
+    )
     position: PositionSchema = Field(..., description="投递的职位信息")
     resume: ResumeSchema = Field(..., description="简历信息")
     creator: UserSchema = Field(..., description="创建该候选人的员工信息")

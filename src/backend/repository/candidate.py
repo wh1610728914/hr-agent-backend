@@ -61,4 +61,5 @@ class CandidateRepo(BaseRepo):
         """修改候选人状态"""
         candidate = await self.by_get_id(id)
         candidate.status = val
+
         return "修改成功"

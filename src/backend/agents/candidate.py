@@ -93,9 +93,7 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
         # 插到数据库里面，连数据库，手动连
         async with SessionLocal() as db:
             async with db.begin():
-
                 candidate_Repo = CandidateRepo(db)
-
                 await candidate_Repo.create_ai_scope(
                     candidate_id=candidate_id,
                     candidate_scope_dict=candidate_scope.model_dump(),
@@ -109,9 +107,7 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
                     await candidate_Repo.update_candidate_status(
                         candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
                     )
-
         return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
-
     except Exception as e:
         return f"得分工具执行失败，错误：{e}"
 
@@ -254,6 +250,23 @@ async def send_interview_email(
             return f"给候选人发送邮件失败:{e}"
 
         return f"给候选人发送面试邮件成功！面试时间初步确认为:{interview_datetime}"
+
+
+@tool
+async def refuse_interview(runtime: ToolRuntime[CandidateAgentState]):
+    """如果候选人拒绝了面试，那么调用该工具来更新候选人状态为已拒绝"""
+    candidate: CandidateSchema = runtime.state["candidate"]
+    try:
+        async with SessionLocal() as db:
+            async with db.begin():
+                candidate_repo = CandidateRepo(db)
+
+                await candidate_repo.update_candidate_status(
+                    candidate.id, CandidateStatusEnum.REFUSED_INTERVIEW
+                )
+        return f"已成功将候选人状态更新为：已拒绝面试"
+    except Exception as e:
+        return f"调用拒绝面试工具失败，错误是:{e}"
 
 
 # 此agent 要评分，判断，发邮件，插入面试邀请，给面试管发送信息
