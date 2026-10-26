@@ -3,7 +3,8 @@ from backend.models.candidate import CandidateAIScoreModel, CandidateModel, Resu
 from backend.models.user import UserModel
 from backend.repository import BaseRepo
 from backend.schemas.candidate import CreateCandidateRequest
-from sqlalchemy import select
+
+from sqlalchemy import func, select
 
 
 class ResumeRepo(BaseRepo):
@@ -63,3 +64,30 @@ class CandidateRepo(BaseRepo):
         candidate.status = val
 
         return "修改成功"
+
+    async def get_candidate_list(self, page, size, keyword):
+        """获取候选人列表"""
+
+        if keyword:
+            pass
+
+        total = await self.session.scalar(func.count(CandidateModel.id))
+        offset = (page - 1) * size
+        if offset >= total:
+            return total, []
+        stmt = (
+            select(CandidateModel)
+            .order_by(CandidateModel.create_at.desc())
+            .limit(size)
+            .offset((page - 1) * size)
+        )
+        candidate_list = await self.session.scalars(stmt)
+        return total, candidate_list.all()
+
+    async def get_score_candidate(self, id):
+        """获取候选人ai得分情况"""
+        stmt = select(CandidateAIScoreModel).where(
+            id == CandidateAIScoreModel.candidate_id
+        )
+        score_candi = await self.session.scalar(stmt)
+        return score_candi

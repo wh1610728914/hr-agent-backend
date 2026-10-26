@@ -96,12 +96,18 @@ class UserRepo(BaseRepo):
 
     async def get_by_hr(self, page: int, size: int):
         """获取hr的总列表"""
-        stmt = select(UserModel).where(UserModel.is_hr == True)
-        stmt_total = select(func.count(UserModel.id))
-        total = await self.session.scalar(stmt_total)
-        limit = size
-        offset = (page - 1) * size
-        stmt = stmt.limit(limit).offset(offset).order_by(UserModel.create_at.desc())
+        base_where = UserModel.is_hr == True
+        total = await self.session.scalar(
+            select(func.count(UserModel.id)).where(base_where)
+        )
+        stmt = (
+            select(UserModel)
+            .where(base_where)
+            .order_by(UserModel.create_at.desc())
+            .limit(size)
+            .offset((page - 1) * size)
+        )
+
         hr_list = (await self.session.scalars(stmt)).all()
 
         return total, hr_list

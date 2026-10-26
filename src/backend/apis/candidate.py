@@ -9,13 +9,15 @@ from backend.core.ocr import PaddleOcr
 from backend.dependencies.db import get_db
 from backend.dependencies.user import get_cache_instance, get_current_user
 from backend.models.user import UserModel
-from backend.schemas import Response
+from backend.schemas import PageResponse, Response
 from backend.services.candidate import (
     create_candidate_service,
+    get_candidate_list_service,
+    get_score_candidate,
     parse_resume_service,
     upload_resume_service,
 )
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -92,4 +94,27 @@ async def create_candidate(
 ):
     logger.info("参数", data)
     res = await create_candidate_service(data, user, db)
+    return Response.success(data=res)
+
+
+@router.get("/list", summary="获取候选人列表")
+async def get_candidate_list(
+    page: int = Query(1, description="页码"),
+    size: int = Query(10, description="每页的数量"),
+    keyword: str | None = Query(None, description="根据关键字查询"),
+    _: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    total, list = await get_candidate_list_service(page, size, keyword, db)
+    print(list)
+    return PageResponse(list=list, total=total)
+
+
+@router.get("/ai-score/{candidate_id}", summary="获取候选人ai得分")
+async def get_ai_candidate_score(
+    candidate_id: str,
+    _: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await get_score_candidate(db, id=candidate_id)
     return Response.success(data=res)

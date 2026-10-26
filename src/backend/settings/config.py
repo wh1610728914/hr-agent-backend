@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     # validation_alias 去读取MAIL_USERNAME作为MAIL_FROM的值
-    MAIL_FROM: str = Field(..., validation_alias="MAIL_USERNAME")
+    # MAIL_FROM: str = Field(..., validation_alias="MAIL_USERNAME")
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.qq.com"
     MAIL_FROM_NAME: str = "大真真"
@@ -62,9 +62,29 @@ class Settings(BaseSettings):
 
     # 邮箱机器人配置
     IMAP_HOST: str = "imap.qq.com"
-    SMTP_HOST: str = Field(..., validation_alias="MAIL_SERVER")
-    EMAIL_USERNAME: str = Field(..., validation_alias="MAIL_USERNAME")
-    EMAIL_PASSWORD: str = Field(..., validation_alias="MAIL_PASSWORD")
+    # SMTP_HOST: str = Field(..., validation_alias="MAIL_SERVER")
+    # EMAIL_USERNAME: str = Field(..., validation_alias="MAIL_USERNAME")
+    # EMAIL_PASSWORD: str = Field(..., validation_alias="MAIL_PASSWORD")
+
+    @computed_field
+    @property
+    def EMAIL_USERNAME(self) -> str:
+        return self.MAIL_USERNAME
+
+    @computed_field
+    @property
+    def EMAIL_PASSWORD(self) -> str:
+        return self.MAIL_PASSWORD
+
+    @computed_field
+    @property
+    def SMTP_HOST(self) -> str:
+        return self.MAIL_SERVER
+
+    @computed_field
+    @property
+    def MAIL_FROM(self) -> str:
+        return self.MAIL_USERNAME
 
     @computed_field
     @property

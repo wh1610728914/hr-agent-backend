@@ -26,7 +26,7 @@ class PositionRequest(BaseModel):
 
 
 class PositionSchema(PositionRequest):
-    pass
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PositionResponse(PositionRequest):

@@ -7,6 +7,8 @@ from backend.core.ocr import PaddleOcr
 from backend.repository.candidate import CandidateRepo, ResumeRepo
 from backend.schemas import Response
 from backend.schemas.candidate import (
+    CandidateAIScopeSchema,
+    CandidateSchema,
     CreateCandidateRequest,
     ResumeParseRequest,
     ResumeParseResponse,
@@ -94,3 +96,23 @@ async def create_candidate_service(
     data_dict = data.model_dump()
     res = await candidate_repo.create_candidate(user, data_dict)
     return res
+
+
+async def get_candidate_list_service(page, size, keyword, db: AsyncSession):
+    """获取候选人列表"""
+    candidate_repo = CandidateRepo(db)
+    total, list = await candidate_repo.get_candidate_list(page, size, keyword)
+    print(total)
+    print("*" * 30)
+    res = [CandidateSchema.model_validate(li) for li in list]
+    # print("结果结果", res)
+    return total, [CandidateSchema.model_validate(li) for li in list]
+
+
+async def get_score_candidate(db: AsyncSession, id):
+    """获取候选人ai得分情况"""
+    candidate_repo = CandidateRepo(db)
+    res = candidate_repo.get_score_candidate(id)
+    if not res:
+        raise BusinessException(message="该候选人暂时没有ai得分情况，请稍后查询")
+    return CandidateAIScopeSchema.model_validate(res)
