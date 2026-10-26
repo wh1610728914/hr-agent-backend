@@ -42,13 +42,12 @@ def dt_to_iso(dt: datetime) -> str:
 
 
 def iso_to_dt(iso_str: str) -> datetime:
-    """
-    将带时区的 ISO-8601 字符串解析为 datetime
-    """
-    # 兼容处理大写 'Z' 结尾的 UTC 时间 (旧版 Python)
     if iso_str.endswith("Z"):
         iso_str = iso_str[:-1] + "+00:00"
-    return datetime.fromisoformat(iso_str)
+    dt = datetime.fromisoformat(iso_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
+    return dt
 
 
 # 从明天的x点起，到days的那个时间，从上午9-12，下午2-6的时间，把每小时平均分割起来，然后和我传过来是时间段进行相比，如果有
@@ -72,9 +71,9 @@ def find_free_slot(
     # 一直生成到 end_time 所在的那天
     while current_day <= end_time:
         # 判断是否周末（可选）：如果是周末，可以跳过
-        # if current_day.weekday() >= 5:
-        #     current_day += timedelta(days=1)
-        #     continue
+        if current_day.weekday() >= 5:
+            current_day += timedelta(days=1)
+            continue
 
         # 上午时段: 9:00 - 12:00 (循环生成 9-10, 10-11, 11-12)
         for h in range(9, 12):

@@ -44,4 +44,5 @@ class DingTalkApi:
             token_data = token_resp.json()
             access_token = token_data["accessToken"]
             refresh_token = token_data["refreshToken"]
-            return refresh_token, access_token
+            res = {"refresh_token": refresh_token, "access_token": access_token}
+            return res

@@ -85,7 +85,7 @@ class UserRepo(BaseRepo):
             self.session.add(dingding_user)
         return dingding_user
 
-    async def get_ding_info(self, user_id: str) -> DingUserResponse | None:
+    async def get_ding_info_repo(self, user_id: str) -> DingUserResponse | None:
         """获取钉钉用户信息"""
         info = await self.session.scalar(
             select(DingDingModel).where(user_id == DingDingModel.user_id)

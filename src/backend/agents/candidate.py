@@ -6,12 +6,13 @@ from datetime import datetime
 from typing import Annotated, List
 from zoneinfo import ZoneInfo
 
+from backend.core.cache import HRCache
 from backend.core.dingtalk import DingTalkApi
 from backend.core.emailBot.bot import EmailBot
 from backend.core.exceptions import BusinessException
 from backend.db.database import SessionLocal
 from backend.dependencies.user import get_cache_instance
-from backend.emailBot.settings import EmailBotSetting
+from backend.core.emailBot.settings import EmailBotSetting
 from backend.models.candidate import CandidateStatusEnum
 from backend.models.ding import DingDingModel
 from backend.repository.candidate import CandidateRepo
@@ -20,8 +21,8 @@ from backend.schemas.cache import DingTalkTokenInfoSchema
 from backend.settings import settings
 from backend.schemas.candidate import CandidateSchema
 from backend.schemas.position import PositionSchema
-from backend.schemas.user import UserSchema
-from backend.utils.date import iso_to_dt
+from backend.schemas.user import DingUserResponse, UserSchema
+from backend.utils.datetime import iso_to_dt
 from backend.utils.datetime import find_free_slot, get_future_time
 from backend.utils.datetime import dt_to_iso
 import httpx
@@ -122,7 +123,7 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
 async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentState]):
     """获取面试官空余时间"""
     # 1.拿到面试官数据和钉钉数据
-    interview_id = runtime.state["interview"].id
+    interview = runtime.state["interview"]
 
     union_id: str | None = None
 
@@ -130,83 +131,151 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
     async with SessionLocal() as db:
         async with db.begin():
             try:
-                user_repo = UserRepo(db)
-                ding_user_info: DingDingModel = user_repo.get_ding_info(interview_id)
-
+                user_Repo = UserRepo(db)
+                ding_user_info: DingUserResponse = await user_Repo.get_ding_info_repo(
+                    interview.id
+                )
                 if not ding_user_info:
-                    return "获取候选人可用时间失败，该用户没有注册钉钉"
+                    return f"无该面试官{interview.username}的钉钉信息"
                 union_id = ding_user_info.union_id
             except Exception as e:
-                return f"获取候选人可用时间失败，错误：{e}"
+                return f"获取面试官空闲时间工具-- 执行数据库失败，错误：{e}"
 
-    # 2.获取钉钉的请求头需要的 access_token
-    cache = get_cache_instance()
-    ding_tokens: DingTalkTokenInfoSchema = cache.get_ding_info(interview_id)
-    if not ding_tokens:
-        return "钉钉 access_token 缺失，请重新授权 "
-    calendar_url = DingTalkApi.build_calendar_list_url(union_id)
-    timeMin = dt_to_iso(get_future_time(9))
-    timeMax = dt_to_iso(get_future_time(9, 7))
+    # 2.获取钉钉日程视图
+    ding_calendar_url = DingTalkApi.get_calendar_url(union_id)
+    timeMin = get_future_time(hour=9)
+    timeMax = get_future_time(hour=9, days=7)
+    cache: HRCache = get_cache_instance()
+    raw = await cache.get_ding_info(user_id=interview.id)
+    if not raw:
+        return f"面试官{interview.username}的钉钉token不存在或已过期"
 
-    async def _fetch_events(access_token: str):
-        """返回 (status_code, data)；网络异常直接抛"""
-        async with httpx.AsyncClient() as client:
-            res = await client.get(
-                calendar_url,
-                params={"timeMin": timeMin, "timeMax": timeMax},
+    token_ding = DingTalkTokenInfoSchema.model_validate_json(raw)
+    calendar_resp = {}
+
+    async def fetch_calendar(access_token: str):
+        """封装起来，方便重试"""
+        async with httpx.AsyncClient(timeout=10) as client:
+            return await client.get(
+                url=ding_calendar_url,
+                params={
+                    "timeMin": dt_to_iso(timeMin),
+                    "timeMax": dt_to_iso(timeMax),
+                },
                 headers={"x-acs-dingtalk-access-token": access_token},
             )
-            return res
 
     try:
-        res = await _fetch_events(ding_tokens.access_token)
-        if res.status_code in (401, 403):
-            logger.warning("access_token 失效，尝试刷新 interview_id=%s", interview_id)
-            new_refresh_token, new_access_token = (
-                await DingTalkApi.refresh_access_token(ding_tokens.refresh_token)
-            )
-            # 重新写回缓存
+        resp = await fetch_calendar(token_ding.access_token)
+        if resp.status_code == 401:
+            new_token = await DingTalkApi.refresh_access_token(token_ding.refresh_token)
+            if not new_token:
+                return (
+                    f"面试官{interview.username}的钉钉token已过期且刷新失败，请重新授权"
+                )
             await cache.set_ding_info(
                 DingTalkTokenInfoSchema(
-                    access_token=new_access_token,
-                    refresh_token=new_refresh_token,
-                    user_id=interview_id,
+                    access_token=new_token["access_token"],
+                    refresh_token=new_token["refresh_token"],
+                    user_id=interview.id,
                 )
             )
-            ding_tokens = cache.get_ding_info(user_id=interview_id)
-            res = await _fetch_events(new_access_token)
-        res.raise_for_status()
-        data = res.json()
-    except Exception as e:
-        logger.exception("调用钉钉日历接口失败 interview_id=%s", interview_id)
-        return f"获取面试官空余时间失败，钉钉接口错误：{e}"
+            token_ding = new_token
+            resp = await fetch_calendar(token_ding.access_token)
+        resp.raise_for_status()
+        calendar_resp = resp.json()
 
-    # 4.计算空余时间
-    events = data.get("events") or []
+    except Exception as e:
+        return f"获取面试官空闲时间工具-- 执行获取钉钉日程视图失败，错误：{e}"
+
+    # 3.解析并获取空闲时间
+    events = calendar_resp.get("events") or []
     if not events:
-        return f"该时间段全部空闲：{timeMin} ~ {timeMax}"
-    try:
-
-        time_list = [
-            (
-                iso_to_dt(event["start"]["dateTime"]),
-                iso_to_dt(event["end"]["dateTime"]),
-            )
-            for event in events
-        ]
-        free_slot = find_free_slot(
-            start_time=iso_to_dt(timeMin),
-            end_time=iso_to_dt(timeMax),
-            existing_events=time_list,
+        return (
+            f"该时段【{timeMin:%Y-%m-%d %H:%M} - {timeMax:%Y-%m-%d %H:%M}】时间全部空闲"
         )
-    except Exception as e:
-        logger.exception("解析钉钉日历事件失败 interview_id=%s", interview_id)
-        return f"解析日历事件失败：{e}"
+    events_list = []
+    for event in events:
+        s = event["start"].get("dateTime") or event["start"].get("date")
+        e = event["end"].get("dateTime") or event["end"].get("date")
+        events_list.append((iso_to_dt(s), iso_to_dt(e)))
+
+    free_slot = find_free_slot(
+        start_time=timeMin, end_time=timeMax, existing_events=events_list
+    )
     if free_slot:
         s, e = free_slot
-        return f"找到空余时间了：{s:%Y-%m-%d %H:%M} ~ {e:%Y-%m-%d %H:%M}"
+        return f"找到空闲时间了：{s:%Y-%m-%d %H:%M} - {e:%Y-%m-%d %H:%M}"
+    return f"没有空闲时间"
 
-    return f"没有空余时间"
+    # # 2.获取钉钉的请求头需要的 access_token
+    # cache = get_cache_instance()
+    # ding_tokens: DingTalkTokenInfoSchema = cache.get_ding_info(interview_id)
+    # if not ding_tokens:
+    #     return "钉钉 access_token 缺失，请重新授权 "
+    # calendar_url = DingTalkApi.build_calendar_list_url(union_id)
+    # timeMin = dt_to_iso(get_future_time(9))
+    # timeMax = dt_to_iso(get_future_time(9, 7))
+
+    # async def _fetch_events(access_token: str):
+    #     """返回 (status_code, data)；网络异常直接抛"""
+    #     async with httpx.AsyncClient() as client:
+    #         res = await client.get(
+    #             calendar_url,
+    #             params={"timeMin": timeMin, "timeMax": timeMax},
+    #             headers={"x-acs-dingtalk-access-token": access_token},
+    #         )
+    #         return res
+
+    # try:
+    #     res = await _fetch_events(ding_tokens.access_token)
+    #     if res.status_code in (401, 403):
+    #         logger.warning("access_token 失效，尝试刷新 interview_id=%s", interview_id)
+    #         new_refresh_token, new_access_token = (
+    #             await DingTalkApi.refresh_access_token(ding_tokens.refresh_token)
+    #         )
+    #         # 重新写回缓存
+    #         await cache.set_ding_info(
+    #             DingTalkTokenInfoSchema(
+    #                 access_token=new_access_token,
+    #                 refresh_token=new_refresh_token,
+    #                 user_id=interview_id,
+    #             )
+    #         )
+    #         ding_tokens = cache.get_ding_info(user_id=interview_id)
+    #         res = await _fetch_events(new_access_token)
+    #     res.raise_for_status()
+    #     data = res.json()
+    # except Exception as e:
+    #     logger.exception("调用钉钉日历接口失败 interview_id=%s", interview_id)
+    #     return f"获取面试官空余时间失败，钉钉接口错误：{e}"
+
+    # # 4.计算空余时间
+    # events = data.get("events") or []
+    # if not events:
+    #     return f"该时间段全部空闲：{timeMin} ~ {timeMax}"
+    # try:
+
+    #     time_list = [
+    #         (
+    #             iso_to_dt(event["start"]["dateTime"]),
+    #             iso_to_dt(event["end"]["dateTime"]),
+    #         )
+    #         for event in events
+    #     ]
+    #     free_slot = find_free_slot(
+    #         start_time=iso_to_dt(timeMin),
+    #         end_time=iso_to_dt(timeMax),
+    #         existing_events=time_list,
+    #     )
+    # except Exception as e:
+    #     logger.exception("解析钉钉日历事件失败 interview_id=%s", interview_id)
+    #     return f"解析日历事件失败：{e}"
+    # if free_slot:
+    #     s, e = free_slot
+    #     return f"找到空余时间了：{s:%Y-%m-%d %H:%M} ~ {e:%Y-%m-%d %H:%M}"
+
+    # return f"没有空余时间"
 
 
 @tool
