@@ -139,7 +139,7 @@ async def agent_test(
     candidate_repo = CandidateRepo(db)
     position_repo = PositionRepo(db)
     interview_repo = UserRepo(db)
-    candidate_model = await candidate_repo.by_get_id("HxREFUYqt4QppCn5NoMjpQ")
+    candidate_model = await candidate_repo.by_get_id("jbCavjiv2jbXLYfvuU2xQt")
     print("对应的候选人是", CandidateSchema.model_validate(candidate_model))
     position_model = await position_repo.get_by_id("c4YerzVnpyukj5WXH75sV2")
     interview_model = await interview_repo.check_by_id("5j3UfAnoxLVdg4RVN7n3xH")

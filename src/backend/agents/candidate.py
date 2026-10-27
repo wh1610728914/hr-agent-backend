@@ -7,7 +7,7 @@ from typing import Annotated, List
 from zoneinfo import ZoneInfo
 
 from backend.core.cache import HRCache
-from backend.core.dingtalk import DingTalkApi
+from backend.core.dingtalk import DingTalkApi, DingTalkHttp
 from backend.core.emailBot.bot import EmailBot
 from backend.core.exceptions import BusinessException
 from backend.db.database import SessionLocal
@@ -171,22 +171,9 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
             )
 
     try:
-        resp = await fetch_calendar(token_ding.access_token)
-        if resp.status_code == 401:
-            new_token = await DingTalkApi.refresh_access_token(token_ding.refresh_token)
-            if not new_token:
-                return (
-                    f"面试官{interview.username}的钉钉token已过期且刷新失败，请重新授权"
-                )
-            await cache.set_ding_info(
-                DingTalkTokenInfoSchema(
-                    access_token=new_token["access_token"],
-                    refresh_token=new_token["refresh_token"],
-                    user_id=interview.id,
-                )
-            )
-            token_ding = new_token
-            resp = await fetch_calendar(new_token["access_token"])
+        resp = await DingTalkHttp.request_with_ding_token(
+            user_id=interview.id, make_request=fetch_calendar
+        )
         resp.raise_for_status()
         calendar_resp = resp.json()
 
@@ -264,16 +251,16 @@ async def confirm_interview_time(
         async with SessionLocal() as db:
             async with db.begin():
                 user_repo = UserRepo(db)
-                user_ding_info: DingUserResponse = user_repo.get_ding_info_repo(
+                user_ding_info: DingUserResponse = await user_repo.get_ding_info_repo(
                     user_id=user.id
                 )
                 if not user_ding_info:
-                    raise BusinessException(message="无该面试官的钉钉信息")
+                    return "无该面试官的钉钉信息"
+
                 union_id = user_ding_info.union_id
         url = DingTalkApi.create_calendar_url(unionID=union_id)
         cache: HRCache = get_cache_instance()
         tokens_info: DingTalkTokenInfoSchema = await cache.get_ding_info(user.id)
-        access_token = tokens_info.access_token
         data = {
             "summary": "面试安排",
             "start": {
@@ -283,19 +270,26 @@ async def confirm_interview_time(
                 "dateTime": dt_to_iso(get_future_time(hours=1)),
             },
         }
-        async with httpx.AsyncClient(timeout=10) as client:
-            res = await client.post(
-                url=url,
-                data=data,
-                headers={"x-acs-dingtalk-access-token": access_token},
-            )
-            if res.status_code != 200:
-                raise BusinessException(
-                    message=f"钉钉接口添加面试日程错误，错误码是:{res.status_code},错误是:{res.text}"
+
+        async def create_calendar(access_token: str):
+            async with httpx.AsyncClient(timeout=10) as client:
+                return await client.post(
+                    url=url,
+                    json=data,
+                    headers={"x-acs-dingtalk-access-token": access_token},
                 )
-        results.append("钉钉创建面试日程成功")
-    except BusinessException as e:
-        raise e
+
+        try:
+            resp = await DingTalkHttp.request_with_ding_token(user.id, create_calendar)
+            if resp.status_code != 200:
+                results.append(
+                    f"钉钉接口添加面试日程错误，错误码是:{res.status_code},错误是:{res.text}"
+                )
+            else:
+                results.append("钉钉创建面试日程成功")
+
+        except BusinessException as e:
+            return e
 
     except Exception as e:
         results.append(f"钉钉创建面试日程失败,错误是{e}")
@@ -319,15 +313,14 @@ async def confirm_interview_time(
                     id=candidate.id, val=CandidateStatusEnum.WAITING_FOR_INTERVIEW
                 )
                 if not res:
-                    raise BusinessException(
-                        message="更新候选人状态失败，未找到该候选人"
-                    )
+                    return "更新候选人状态失败，未找到该候选人"
+
         results.append("系统记录创建成功，候选人状态已更新")
     except InterruptedError:
-        raise BusinessException(message="该候选人已安排过面试，请勿重复操作")
+        return f"该候选人已安排过面试，请勿重复操作"
 
     except Exception as e:
-        raise BusinessException(message=f"安排面试失败，系统内部错误: {e}")
+        return f"安排面试失败，系统内部错误: {e}"
 
     final_report = "面试安排流程执行完毕，详情如下：\n" + "\n".join(
         [f"- {r}" for r in results]
