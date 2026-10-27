@@ -81,7 +81,9 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
 
     try:
         # 解析SCORE_FOR_CANDIDATE_USER_PROMPT里面的变量 用PromptTemplate
-        user_prompt_template = PromptTemplate(SCORE_FOR_CANDIDATE_USER_PROMPT)
+        user_prompt_template = PromptTemplate.from_template(
+            SCORE_FOR_CANDIDATE_USER_PROMPT
+        )
         # invoke 可以把传入的json
         user_prompt = user_prompt_template.invoke(
             {
@@ -89,7 +91,12 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
                 "position": position.model_dump_json(),
             }
         )
-        res = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+        print(user_prompt.text)
+        print("*" * 40)
+        res = await agent.ainvoke(
+            {"messages": [HumanMessage(content=user_prompt.text)]}
+        )
+
         candidate_scope: CandidateAIScopeSchema = res["structured_response"]
         candidate_id = candidate.id
         # 插到数据库里面，连数据库，手动连
@@ -100,23 +107,23 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
                     candidate_id=candidate_id,
                     candidate_scope_dict=candidate_scope.model_dump(),
                 )
+                print("得分工具", candidate_scope)
+                print("@" * 30)
                 # 判断overall_score得分情况，大于8分的，修改状态为AI_FILTER_PASSED 否则 AI_FILTER_FAILED
                 if candidate_scope.overall_score > 8:
-                    await candidate_Repo.update_candidate_status(
-                        candidate_id, CandidateStatusEnum.AI_FILTER_PASSED
+                    res = await candidate_Repo.update_candidate_status(
+                        candidate_id,
+                        CandidateStatusEnum.AI_FILTER_PASSED,
                     )
                 else:
-                    await candidate_Repo.update_candidate_status(
+                    res = await candidate_Repo.update_candidate_status(
                         candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
                     )
+                print(CandidateSchema.model_validate(res))
+                print("%" * 30)
         return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
     except Exception as e:
         return f"得分工具执行失败，错误：{e}"
-
-
-# # 获取钉钉的accesstoken，如果过期的话，用refresh_token进行更新就好！
-# async def get_ding_access_token(user_id:str) -> str:
-#     """获取钉钉的accesstoken"""
 
 
 @tool
@@ -181,7 +188,7 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
                 )
             )
             token_ding = new_token
-            resp = await fetch_calendar(token_ding.access_token)
+            resp = await fetch_calendar(new_token["access_token"])
         resp.raise_for_status()
         calendar_resp = resp.json()
 
@@ -389,7 +396,7 @@ class CandidateProcessAgent:
             state_schema=CandidateAgentState,
         )
         config = {"configurable": {"thread_id": thread_id}}
-        await agent.ainvoke(
+        result = await agent.ainvoke(
             {
                 "messages": messages,
                 "candidate": self.candiadate,
@@ -398,6 +405,7 @@ class CandidateProcessAgent:
             },
             config=config,
         )
+        return result
 
     # 要想变成 异步上下文管理的话，就得加下面两个方法
     async def __aenter__(self):

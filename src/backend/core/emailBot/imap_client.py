@@ -6,7 +6,6 @@ from email.message import Message
 import imaplib
 from typing import Optional
 
-from backend.core.exceptions import RuntimeError
 from loguru import logger
 
 # def do_thing():
@@ -45,7 +44,7 @@ class ImapMail:
         """登录"""
         # if not self._conn:
         #     raise RuntimeError("IMAP暂未连接")
-        self.ImapConn(self)
+        self.ImapConn()
         # 这个连接对象就有.login 这个方法，就是告诉这个连接对象我的账号和密码，去登录！
         await asyncio.to_thread(self._conn.login, username, password)
         self._username = username
@@ -55,7 +54,7 @@ class ImapMail:
         """要看邮箱里面的哪个文件夹"""
         # if not self._conn:
         #     raise RuntimeError("IMAP暂未连接")
-        self.ImapConn(self)
+        self.ImapConn()
         await asyncio.to_thread(self._conn.select, mailbox)
         self._mailbox = mailbox
 
@@ -93,7 +92,7 @@ class ImapMail:
         """取信前，先搜一下编号 返回UID列表"""
         # if not self._conn:
         #     raise RuntimeError("IMAP暂未连接")
-        self.ImapConn(self)
+        self.ImapConn()
 
         def _search():
             # SEARCH 表搜索命令 ， None:是给搜索命令的额外参数（这里不用） ，criteria：搜索条件比如all
@@ -117,7 +116,7 @@ class ImapMail:
 
     # ============== 取信类 =====================
     async def fetch_rfc822(self, uid: str) -> Message:
-        self.ImapConn(self)
+        self.ImapConn()
 
         def _fetch():
             # FETCH 取信 ； uid 要取哪一份， "(RFC822)" = 取信的完整原始内容（RFC822 是邮件格式标准，意思是"整封信，含所有头、正文、附件"）。
@@ -168,7 +167,7 @@ class ImapMail:
     # ============== 标记类 =====================
     async def mark_seen(self, uid: str) -> None:
         """把一封信标记为已读"""
-        self.ImapConn(self)
+        self.ImapConn()
 
         def _store():
             # STORE 修改信件的标志； uid哪一封； +FLAGS：添加一个标志（ + 是添加，-是移除） r"(\\Seen)" 要添加的标志是 \Seen（已读）
@@ -188,7 +187,7 @@ class ImapMail:
         uid_list = [str(u) for u in uids]
         if not uid_list:
             return
-        self.ImapConn(self)
+        self.ImapConn()
 
         uid_set = ",".join(uid_list)  # 把 ["100","101"] 拼成 "100,101"
 

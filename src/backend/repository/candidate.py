@@ -32,6 +32,11 @@ class CandidateRepo(BaseRepo):
 
     async def create_candidate(self, user, data):
         """创建候选人"""
+        candidate = await self.session.scalar(
+            select(CandidateModel).where(CandidateModel.email == data["email"])
+        )
+        if candidate:
+            raise BusinessException(message="该候选人不可重复添加")
         # 字典解包实例化orm模型 ,直接解包给数据库
         candidateInfo = CandidateModel(**data)
         candidateInfo.creator_id = user.id
@@ -40,9 +45,11 @@ class CandidateRepo(BaseRepo):
         await self.session.refresh(candidateInfo)
         return "创建成功"
 
-    async def create_ai_scope(self, id, data):
+    async def create_ai_scope(self, candidate_id, candidate_scope_dict):
         """创建ai得分"""
-        aiScopeInfo = CandidateAIScoreModel(candidate_id=id, **data)
+        aiScopeInfo = CandidateAIScoreModel(
+            candidate_id=candidate_id, **candidate_scope_dict
+        )
         self.session.add(aiScopeInfo)
         await self.session.flush()
         await self.session.refresh(aiScopeInfo)
@@ -63,7 +70,7 @@ class CandidateRepo(BaseRepo):
         candidate = await self.by_get_id(id)
         candidate.status = val
 
-        return "修改成功"
+        return candidate
 
     async def get_candidate_list(self, page, size, keyword):
         """获取候选人列表"""

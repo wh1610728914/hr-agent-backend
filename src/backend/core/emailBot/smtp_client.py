@@ -2,12 +2,10 @@
 
 import asyncio
 from email import message_from_bytes
-from email.message import EmailMessage, Message
-import imaplib
-import smtplib
-from typing import Optional
+from email.message import EmailMessage
 
-from backend.core.exceptions import RuntimeError
+import smtplib
+
 from loguru import logger
 
 # def do_thing():
@@ -47,13 +45,13 @@ class SmtpMail:
         """登录"""
         # if not self._conn:
         #     raise RuntimeError("IMAP暂未连接")
-        self.ImapConn(self)
+        self.ImapConn()
         # 这个连接对象就有.login 这个方法，就是告诉这个连接对象我的账号和密码，去登录！
         await asyncio.to_thread(self._conn.login, username, password)
 
     async def send_message(self, msg: EmailMessage) -> None:
         """发信"""
-        self.ImapConn(self)
+        self.ImapConn()
         await asyncio.to_thread(self._conn.send_message, msg)
 
     async def quit(self) -> None:

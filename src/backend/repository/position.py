@@ -54,8 +54,10 @@ class PositionRepo(BaseRepo):
 
     async def get_by_id(self, id: str):
         """通过id获取对应的数据"""
-        stmt = select(PositionModel).where(PositionModel.id == id)
-        position = self.session.scalar(stmt)
+
+        position = await self.session.scalar(
+            select(PositionModel).where(PositionModel.id == id)
+        )
         return position
 
     async def del_position(self, position_id: str):

@@ -3,7 +3,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.core.cache import HRCache, OCRInfoSchema
-from backend.schemas.candidate import CreateCandidateRequest, ResumeParseRequest
+from backend.repository.candidate import CandidateRepo
+from backend.repository.position import PositionRepo
+from backend.repository.user import UserRepo
+from backend.schemas.candidate import (
+    CandidateSchema,
+    CreateCandidateRequest,
+    ResumeParseRequest,
+)
+from backend.schemas.position import PositionSchema
+from backend.schemas.user import UserSchema
 from backend.settings import settings
 from backend.core.ocr import PaddleOcr
 from backend.dependencies.db import get_db
@@ -17,6 +26,7 @@ from backend.services.candidate import (
     parse_resume_service,
     upload_resume_service,
 )
+from backend.tasks.agent import run_agent_test
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,7 +102,7 @@ async def create_candidate(
     user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    logger.info("参数", data)
+    print("can", data)
     res = await create_candidate_service(data, user, db)
     return Response.success(data=res)
 
@@ -117,4 +127,26 @@ async def get_ai_candidate_score(
     db: AsyncSession = Depends(get_db),
 ):
     res = await get_score_candidate(db, id=candidate_id)
+    return Response.success(data=res)
+
+
+@router.post("/agent/test", summary="测试候选人agent")
+async def agent_test(
+    background_tasks: BackgroundTasks,
+    _: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    candidate_repo = CandidateRepo(db)
+    position_repo = PositionRepo(db)
+    interview_repo = UserRepo(db)
+    candidate_model = await candidate_repo.by_get_id("HxREFUYqt4QppCn5NoMjpQ")
+    print("对应的候选人是", CandidateSchema.model_validate(candidate_model))
+    position_model = await position_repo.get_by_id("c4YerzVnpyukj5WXH75sV2")
+    interview_model = await interview_repo.check_by_id("5j3UfAnoxLVdg4RVN7n3xH")
+    res = background_tasks.add_task(
+        run_agent_test,
+        candidate=CandidateSchema.model_validate(candidate_model),
+        position=PositionSchema.model_validate(position_model),
+        interview=UserSchema.model_validate(interview_model),
+    )
     return Response.success(data=res)

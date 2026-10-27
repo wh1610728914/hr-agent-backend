@@ -52,7 +52,7 @@ async def upload_resume_service(file: UploadFile, user: UserModel, db: AsyncSess
                 await fp.write(chunk)
                 chunk = await file.read(1024)
         finally:
-            fp.close()
+            await fp.close()
 
     # 3.把word变成pdf
     transform_types = [".docx", ".doc"]

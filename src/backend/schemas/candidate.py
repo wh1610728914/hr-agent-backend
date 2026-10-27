@@ -57,6 +57,7 @@ class CreateCandidateRequest(BaseModel):
 class CandidateSchema(BaseModel):
     """候选人"""
 
+    id: str
     name: str = Field(..., description="候选人姓名")
     email: str = Field(..., description="候选人邮箱")
     gender: GenderEnum = Field(GenderEnum.UNKNOWN, description="候选人性别")
@@ -83,6 +84,7 @@ class CandidateSchema(BaseModel):
 class CandidateAIScopeSchema(BaseModel):
     """候选人ai评分后返回的格式"""
 
+    id: str
     work_experience_score: int = Field(..., description="工作经验得分")
     technical_skills_score: int = Field(..., description="技术能力得分")
     soft_skills_score: int = Field(..., description="软技能得分")

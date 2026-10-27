@@ -116,7 +116,7 @@ class Settings(BaseSettings):
         # 若密码是p@ssword，直接拼接会变成 ...://user:p@ssword@host...
         # SQLAlchemy 解析会出错。在拼接时加一层转义
         escaped_password = quote_plus(self.DB_PASSWORD)
-        return f"postgresql+psycopg://{self.DB_USER}:{escaped_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_AGENT_NAME}"
+        return f"postgresql://{self.DB_USER}:{escaped_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_AGENT_NAME}"
 
     # 告诉pydantic去哪里去读.env文件
     model_config = SettingsConfigDict(
