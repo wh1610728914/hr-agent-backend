@@ -26,6 +26,10 @@ class DingTalkApi:
             f"/calendar/users/{unionID}/calendars/{calendarId}/events",
         )
 
+    @classmethod
+    def create_calendar_url(cls, unionID, calendarId="primary"):
+        return cls.get_calendar_url(unionID, calendarId)
+
     async def refresh_access_token(self, refresh_token: str):
         """刷新access_token"""
         async with httpx.AsyncClient() as client:

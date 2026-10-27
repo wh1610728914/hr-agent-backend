@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 
-def get_future_time(hour: str, days: int = 1) -> datetime:
+def get_future_time(hour: str, days: int = 1, hours: int = 0) -> datetime:
     """获取明天（或 N 天后）x点的日期 (带东八区时区)
     hour:小时
     days：往后退几天，默认1天
@@ -11,21 +11,19 @@ def get_future_time(hour: str, days: int = 1) -> datetime:
 
     """
 
-    # 1. 将传入的字符串小时转为整数（支持传入 "9" 或 "09"）
-    target_hour = int(hour)
-
-    # 2. 定义东八区时区 (+08:00)
     tz_utc8 = timezone(timedelta(hours=8))
-
-    # 3. 获取当前带时区的时间
     now = datetime.now(tz_utc8)
 
-    # 4. 加上一天获取明天，然后替换成指定的时分秒
-    target_time = (now + timedelta(days=days)).replace(
-        hour=target_hour, minute=0, second=0, microsecond=0
-    )
+    # 如果传了 hours，说明是要计算“几小时后”，直接用当前时间加
+    if hours > 0:
+        return now + timedelta(hours=hours)
 
-    return target_time
+    # 否则走原来的逻辑（几天后的几点）
+    target_time = (now + timedelta(days=days)).replace(
+        hour=hour, minute=0, second=0, microsecond=0
+    )
+    # 返回的iso
+    return target_time.isoformat()
 
 
 def dt_to_iso(dt: datetime) -> str:
