@@ -42,8 +42,10 @@ class CandidateRepo(BaseRepo):
         candidateInfo.creator_id = user.id
         self.session.add(candidateInfo)
         await self.session.flush()
-        await self.session.refresh(candidateInfo)
-        return "创建成功"
+        await self.session.refresh(
+            candidateInfo, attribute_names=["position", "creator"]
+        )
+        return candidateInfo
 
     async def create_ai_scope(self, candidate_id, candidate_scope_dict):
         """创建ai得分"""

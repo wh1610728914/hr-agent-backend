@@ -100,12 +100,18 @@ async def ocr(
 @router.post("/create", summary="添加候选人")
 async def create_candidate(
     data: CreateCandidateRequest,
+    background_task: BackgroundTasks,
     user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    print("can", data)
-    res = await create_candidate_service(data, user, db)
-    return Response.success(data=res)
+
+    candidate: CandidateSchema = await create_candidate_service(data, user, db)
+    position = candidate.position
+    Interviewer = candidate.creator
+    res = background_task.add_task(
+        run_agent_test, candidate=candidate, position=position, interview=Interviewer
+    )
+    return Response.success(message="新增成功", data=res)
 
 
 @router.get("/list", summary="获取候选人列表")

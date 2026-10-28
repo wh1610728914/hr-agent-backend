@@ -95,7 +95,7 @@ async def create_candidate_service(
     # pydantic 转为字典
     data_dict = data.model_dump()
     res = await candidate_repo.create_candidate(user, data_dict)
-    return res
+    return CandidateSchema.model_validate(res)
 
 
 async def get_candidate_list_service(page, size, keyword, db: AsyncSession):
