@@ -8,6 +8,7 @@ from backend.repository.position import PositionRepo
 from backend.repository.user import UserRepo
 from backend.schemas.candidate import (
     CandidateSchema,
+    CandidateUpdateRequest,
     CreateCandidateRequest,
     ResumeParseRequest,
 )
@@ -159,14 +160,17 @@ async def agent_test(
     return Response.success(data=res)
 
 
-@router.get("/update/status/{candidate_id}", summary="更新候选人状态")
+@router.patch("/update/status/{candidate_id}", summary="更新候选人状态")
 async def update_candidate_status(
-    candidate_id: str, val: str, db: AsyncSession = Depends(get_db)
+    candidate_id: str,
+    restInfo: CandidateUpdateRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     candidate_id：候选人id
     val：更新的候选人状态
     """
 
-    res = await update_candidate_status_service(candidate_id, val, db)
+    res = await update_candidate_status_service(candidate_id, restInfo, db)
     return Response.success(message=res)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from backend.models.candidate import CandidateStatusEnum, GenderEnum
@@ -96,3 +97,15 @@ class CandidateAIScopeSchema(BaseModel):
     weaknesses: list[str] = Field(..., description="劣势/待改进点(JSON 字符串数组)")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateUpdateRequest(BaseModel):
+    """更新候选人状态请求"""
+
+    status: CandidateStatusEnum = Field(..., description="候选人状态")
+    interview_time: Optional[datetime] = Field(
+        ..., description="面试时间，当状态变更为待面试时必填"
+    )
+    rejection_reason: Optional[str] = Field(
+        ..., description="未通过原因，当状态变更为面试未通过时必填"
+    )

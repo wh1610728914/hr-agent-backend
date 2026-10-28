@@ -1,19 +1,26 @@
 from pyclbr import Class
 from uuid import uuid4
+from xmlrpc.client import INTERNAL_ERROR
 
 import aiofiles
 
 from backend.core.ocr import PaddleOcr
+from backend.models.candidate import CandidateStatusEnum
+from backend.models.interview import InterviewResultEnum
 from backend.repository.candidate import CandidateRepo, ResumeRepo
+from backend.repository.interview import Interview
 from backend.schemas import Response
 from backend.schemas.candidate import (
     CandidateAIScopeSchema,
     CandidateSchema,
+    CandidateUpdateRequest,
     CreateCandidateRequest,
     ResumeParseRequest,
     ResumeParseResponse,
     ResumeResponse,
 )
+
+from backend.schemas.interview import InterviewSchema
 from backend.settings import settings
 from backend.core.exceptions import BusinessException
 from backend.core.pdf import WordToPdfConverter
@@ -94,6 +101,9 @@ async def create_candidate_service(
     candidate_repo = CandidateRepo(db)
     # pydantic 转为字典
     data_dict = data.model_dump()
+    candidate_info = await candidate_repo.by_get_id(data.email)
+    if candidate_info:
+        raise BusinessException(message="不可重复添加候选人")
     res = await candidate_repo.create_candidate(user, data_dict)
     return CandidateSchema.model_validate(res)
 
@@ -118,8 +128,82 @@ async def get_score_candidate(db: AsyncSession, id):
     return CandidateAIScopeSchema.model_validate(res)
 
 
-async def update_candidate_status_service(db: AsyncSession, id, val):
-    """获取候选人ai得分情况"""
+CANDIDATE_STATUS = [
+    CandidateStatusEnum.APPLICATION,  # 已投递
+    CandidateStatusEnum.AI_FILTER_FAILED,  # AI筛选失败
+    CandidateStatusEnum.AI_FILTER_PASSED,  # AI筛选成功
+    CandidateStatusEnum.INTERVIEW_PASSED,  # 面试通过
+    CandidateStatusEnum.INTERVIEW_REJECTED,  # 面试未通过
+    CandidateStatusEnum.HIRED,  # 已入职
+    CandidateStatusEnum.REJECTED,  # 已拒绝
+    CandidateStatusEnum.REFUSED_INTERVIEW,  # 拒绝面试
+]
+
+
+async def update_candidate_status_service(
+    db: AsyncSession, id: str, restInfo: CandidateUpdateRequest
+):
+    """更改候选人状态"""
     candidate_repo = CandidateRepo(db)
-    res = await candidate_repo.update_candidate_status(id, val)
-    return CandidateSchema.model_validate(res)
+    candidate_info: CandidateSchema = await candidate_repo.by_get_id(id)
+    if not candidate_info:
+        raise BusinessException(message="无该候选人信息")
+
+    # 更改状态只能从前往后，如果该面试者状态是被拒绝，那就不能变为待面试
+    current_idx = CANDIDATE_STATUS.index(candidate_info.status)
+    target_idx = CANDIDATE_STATUS.index(restInfo.status)
+    if target_idx < current_idx:
+        raise BusinessException(message="只能选择当前状态之后的状态")
+    interview_repo = Interview(db)
+    if restInfo.status == CandidateStatusEnum.WAITING_FOR_INTERVIEW:
+        if not restInfo.interview_time:
+            raise BusinessException(message="请选择面试时间")
+        try:
+            await interview_repo.create_interview_repo(
+                {
+                    "scheduled_time": restInfo.interview_time,
+                    "result": InterviewResultEnum.PENDING,
+                    "candidate_id": id,
+                    "interviewer_id": candidate_info.creator.id,
+                }
+            )
+        except Exception as e:
+            logger.exception(f"创建面试失败，错误是：{e}")
+            return f"创建面试失败，错误是：{e}"
+
+    elif restInfo.status in (
+        CandidateStatusEnum.INTERVIEW_PASSED,  # 面试通过
+        CandidateStatusEnum.INTERVIEW_REJECTED,  # 面试未通过
+        CandidateStatusEnum.HIRED,  # 已入职
+        CandidateStatusEnum.REJECTED,  # 已拒绝
+        CandidateStatusEnum.REFUSED_INTERVIEW,  # 拒绝面试
+    ):
+
+        interview = await interview_repo.get_interview_repo(
+            candidate_id=candidate_info.id
+        )
+
+        if not interview:
+            raise BusinessException(message="面试记录不存在")
+        data = {"id": interview.id}
+        if restInfo.status == CandidateStatusEnum.INTERVIEW_REJECTED:
+            # 面试未通过，要写未通过原因的
+            data["reason"] = restInfo.rejection_reason
+            data["status"] = InterviewResultEnum.FAILED
+        else:
+            data["status"] = (
+                InterviewResultEnum.PASSED
+                if restInfo.status
+                in (CandidateStatusEnum.INTERVIEW_PASSED, CandidateStatusEnum.HIRED)
+                else InterviewResultEnum.FAILED
+            )
+        await interview_repo.update_interview_status_repo(data)
+
+    try:
+        # 更改候选人status状态
+        res = await candidate_repo.update_candidate_status(
+            candidate_info, restInfo.status
+        )
+        return CandidateSchema.model_validate(res)
+    except Exception as e:
+        logger.exception(f"更改候选人状态失败,错误是{e}")
