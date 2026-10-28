@@ -22,6 +22,7 @@ from backend.models.user import UserModel
 from backend.schemas import PageResponse, Response
 from backend.services.candidate import (
     create_candidate_service,
+    get_7_candidate_list_service,
     get_candidate_list_service,
     get_score_candidate,
     parse_resume_service,
@@ -174,3 +175,9 @@ async def update_candidate_status(
 
     res = await update_candidate_status_service(candidate_id, restInfo, db)
     return Response.success(message=res)
+
+
+@router.get("/7list", summary="获取7天内的候选人")
+async def get_7_candidate_list(db: AsyncSession = Depends(get_db)):
+    res = await get_7_candidate_list_service(db)
+    return Response.success(data=res)

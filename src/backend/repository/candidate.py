@@ -1,6 +1,8 @@
+import datetime
+from operator import and_
+
 from backend.core.exceptions import BusinessException
 from backend.models.candidate import CandidateAIScoreModel, CandidateModel, ResumeModel
-from backend.models.user import UserModel
 from backend.repository import BaseRepo
 from backend.schemas.candidate import CreateCandidateRequest
 
@@ -102,3 +104,28 @@ class CandidateRepo(BaseRepo):
         )
         score_candi = await self.session.scalar(stmt)
         return score_candi
+
+    async def get_7_candidate_list(self, db, start_time: datetime, end_time: datetime):
+        """获取7天内的候选人"""
+
+        stmt = (
+            select(
+                # 把create_at这个时间戳只保留日期部分（丢掉时分秒）
+                func.date(CandidateModel.create_at),
+                # 数一数共多少个id
+                func.count(CandidateModel.id),
+            ).where(
+                # 查询条件 and
+                and_(
+                    CandidateModel.create_at >= start_time,
+                    CandidateModel.create_at <= end_time,
+                )
+            )
+            # 按什么分组，把同一天的归成一组
+            .group_by(func.date(CandidateModel.create_at))
+            # 按什么排序
+            .order_by(func.date(CandidateModel.create_at))
+        )
+
+        res = await self.session.execute(stmt)
+        return res.all()

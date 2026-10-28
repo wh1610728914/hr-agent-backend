@@ -32,14 +32,6 @@ class UserRepo(BaseRepo):
         )
         return user
 
-    async def get_by_time(self, time_str: str):
-        """获取根据创建日期获取"""
-        res = await self.session.execute(
-            select(UserModel).where(UserModel.create_at >= time_str)
-        )
-        users = res.scalars().all()
-        return users
-
     async def get_user_list(self, page: int, size: int, department_id: str | None):
         """获取用户列表"""
         # 1.基础查询

@@ -5,7 +5,6 @@ from backend.dependencies.user import (
 )
 from backend.models.user import UserModel
 from backend.services.user import (
-    increaseDays7CandidatesService,
     getUserListService,
     updateUserStatusService,
 )
@@ -21,13 +20,6 @@ from backend.services.user import inviteCodeService
 from backend.schemas import Response
 
 router = APIRouter(prefix="/user", tags=["用户方面"])
-
-
-@router.get("/increaseDays", summary="获取7天内增加的候选人")
-async def getIncreaseDays7(db: AsyncSession = Depends(get_db)):
-    """获取指定时间内增加的候选人"""
-    res = await increaseDays7CandidatesService(db)
-    return Response.success(data=res)
 
 
 @router.get("/list", summary="获取员工列表")

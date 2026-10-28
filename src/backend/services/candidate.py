@@ -1,15 +1,15 @@
-from pyclbr import Class
+from datetime import datetime, timedelta
+
 from uuid import uuid4
 from xmlrpc.client import INTERNAL_ERROR
 
 import aiofiles
 
-from backend.core.ocr import PaddleOcr
+
 from backend.models.candidate import CandidateStatusEnum
 from backend.models.interview import InterviewResultEnum
 from backend.repository.candidate import CandidateRepo, ResumeRepo
 from backend.repository.interview import Interview
-from backend.schemas import Response
 from backend.schemas.candidate import (
     CandidateAIScopeSchema,
     CandidateSchema,
@@ -20,13 +20,13 @@ from backend.schemas.candidate import (
     ResumeResponse,
 )
 
-from backend.schemas.interview import InterviewSchema
+
 from backend.settings import settings
 from backend.core.exceptions import BusinessException
 from backend.core.pdf import WordToPdfConverter
 from backend.models.user import UserModel
 from backend.tasks.ocr_task import ocr_parse_resume_task
-from fastapi import BackgroundTasks, File, UploadFile
+from fastapi import BackgroundTasks, UploadFile
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
@@ -207,3 +207,24 @@ async def update_candidate_status_service(
         return CandidateSchema.model_validate(res)
     except Exception as e:
         logger.exception(f"更改候选人状态失败,错误是{e}")
+
+
+async def get_7_candidate_list_service(db: AsyncSession):
+    """获取7天内的候选人"""
+    candidate_repo = CandidateRepo(db)
+    end_time = datetime.now()
+    start_time = end_time - timedelta(days=6)
+
+    rows = await candidate_repo.get_7_candidate_list(
+        db, start_time=start_time, end_time=end_time
+    )
+
+    print("候选人", rows)
+    day_counts = {day: count for day, count in rows}
+    # rows只返回有数据的天数，下面要把没数据的也拼出来
+    results = []
+    for x in range(7):
+        day_x = (start_time + timedelta(days=x)).date()
+        results.append({"days": day_x.isoformat(), "count": day_counts.get(day_x, 0)})
+    return results
+    # return [CandidateSchema.model_validate(item) for item in items]
