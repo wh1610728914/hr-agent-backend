@@ -1,4 +1,4 @@
-# 用来做定时任务调度的 uv add schedule
+# 用来做定时任务调度的 uv add apscheduler
 # 那我需要每隔15s 去邮箱看看有没有收到新邮件。然后再调用llm回复候选人
 
 
@@ -30,10 +30,9 @@ async def pool_and_process_emails(bot: EmailBot, state: dict):
     # 1.读取 last_uid（上次处理到的邮件 UID）
 
     cache: HRCache = get_cache_instance()
-    pre_last_uid = state["last_uid"]
 
     # 2.拉取 last_uid 之后的新邮件
-    new_emails = await bot.fetch_since_uid(pre_last_uid)
+    new_emails = await bot.fetch_since_uid(state["last_uid"])
     if not new_emails:
         return
     new_emails.sort(key=lambda e: int(e.uid))
@@ -43,8 +42,6 @@ async def pool_and_process_emails(bot: EmailBot, state: dict):
         logger.info(f"收到新邮件，来自: {mail.from_.address}, 主题: {mail.subject}")
         try:
             async with CandidateProcessAgent() as agent:
-                if mail.from_.address.lower() == bot.settings.email.lower():
-                    continue
                 thread_id = mail.from_.address
                 await agent.ainvoke(
                     messages=[
@@ -53,15 +50,18 @@ async def pool_and_process_emails(bot: EmailBot, state: dict):
                     thread_id=thread_id,
                 )
 
-                state["last_uid"] = max(state["last_uid"], int(mail.uid))
-                try:
-                    cache = HRCache()
-                    await cache.set_email_last_uid(state["last_uid"])
-                except Exception as e:
-                    logger.exception(f"从redis查找last_uid失败，错误是：{e}")
         except Exception as e:
             logger.exception(f"处理邮件UID={mail.uid}失败，错误是{e}")
-            return f"轮询邮件失败，错误是{e}"
+            continue
+            # return f"轮询邮件失败，错误是{e}"
+        # 仅在处理成功后前进 last_uid
+        state["last_uid"] = max(state["last_uid"], int(mail.uid))
+        try:
+            await cache.set_email_last_uid(state["last_uid"])
+        except Exception as e:
+            logger.exception(
+                f"从redis查找last_uid失败UID={state['last_uid']}，错误是：{e}"
+            )
 
 
 async def start_email_polling():
