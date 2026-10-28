@@ -2,7 +2,7 @@
 # 拿到候选人和职业信息后，对候选人进行评分，给面试官进行面试安排
 
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, List
 from zoneinfo import ZoneInfo
 
@@ -14,11 +14,10 @@ from backend.db.database import SessionLocal
 from backend.dependencies.user import get_cache_instance
 from backend.core.emailBot.settings import EmailBotSetting
 from backend.models.candidate import CandidateStatusEnum
-from backend.models.ding import DingDingModel
+from backend.models.interview import InterviewResultEnum
 from backend.repository.candidate import CandidateRepo
 from backend.repository.interview import Interview
 from backend.repository.user import UserRepo
-from backend.schemas.cache import DingTalkTokenInfoSchema
 from backend.settings import settings
 from backend.schemas.candidate import CandidateSchema
 from backend.schemas.position import PositionSchema
@@ -29,7 +28,8 @@ from backend.utils.datetime import dt_to_iso
 import httpx
 from langgraph.prebuilt import ToolRuntime
 from loguru import logger
-
+from sqlalchemy.exc import IntegrityError
+from langgraph.errors import GraphRecursionError
 
 from .llms import model
 from langchain.agents import create_agent, AgentState
@@ -43,7 +43,7 @@ from .prompts import (
 )
 from langchain.tools import tool
 from backend.schemas.candidate import CandidateAIScopeSchema
-from langchain.messages import HumanMessage
+from langchain.messages import HumanMessage, AIMessage
 from langchain_core.prompts import PromptTemplate
 
 
@@ -72,7 +72,11 @@ _score_agent = create_agent(
 # 工具
 @tool
 async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
-    """给候选人进行评分"""
+    """给候选人进行评分
+    评分结果会存入数据库中，并根据评分结果修改候选人状态。
+        return：
+        - str | None: 评分结果的JSON字符串，如果评分失败则返回None
+    """
     agent = _score_agent
     state = runtime.state
     candidate = state["candidate"]
@@ -100,28 +104,35 @@ async def score_for_candidate(runtime: ToolRuntime[CandidateAgentState]):
         candidate_scope: CandidateAIScopeSchema = res["structured_response"]
         candidate_id = candidate.id
         # 插到数据库里面，连数据库，手动连
-        async with SessionLocal() as db:
-            async with db.begin():
-                candidate_Repo = CandidateRepo(db)
-                await candidate_Repo.create_ai_scope(
-                    candidate_id=candidate_id,
-                    candidate_scope_dict=candidate_scope.model_dump(),
-                )
-
-                # 判断overall_score得分情况，大于8分的，修改状态为AI_FILTER_PASSED 否则 AI_FILTER_FAILED
-                if candidate_scope.overall_score > 8:
-                    res = await candidate_Repo.update_candidate_status(
-                        candidate_id,
-                        CandidateStatusEnum.AI_FILTER_PASSED,
+        try:
+            async with SessionLocal() as db:
+                async with db.begin():
+                    candidate_Repo = CandidateRepo(db)
+                    await candidate_Repo.create_ai_scope(
+                        candidate_id=candidate_id,
+                        candidate_scope_dict=candidate_scope.model_dump(),
                     )
-                else:
-                    res = await candidate_Repo.update_candidate_status(
-                        candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
-                    )
+                    # 判断overall_score得分情况，大于8分的，修改状态为AI_FILTER_PASSED 否则 AI_FILTER_FAILED
+                    if candidate_scope.overall_score > 8:
+                        await candidate_Repo.update_candidate_status(
+                            candidate_id,
+                            CandidateStatusEnum.AI_FILTER_PASSED,
+                        )
+                    else:
+                        await candidate_Repo.update_candidate_status(
+                            candidate_id, CandidateStatusEnum.AI_FILTER_FAILED
+                        )
+        except Exception as e:
+            logger.exception(f"更改候选人状态失败，严重错误: {e}")
+            return (
+                f"【系统严重错误】更改候选人状态失败。"
+                f"**请立即中断对话，严禁调用任何工具，直接向HR输出：'数据库写入失败，流程已中断，请人工处理。'**"
+            )
 
         return f"得分工具执行成功，该候选人得分为:{candidate_scope.model_dump_json()}"
     except Exception as e:
-        return f"得分工具执行失败，错误：{e}"
+        logger.exception(f"打分系统发生严重异常: {e}")
+        return f"【系统错误】得分工具执行失败，错误：{e}。**请立即终止所有流程，严禁重试，直接向HR报告此错误。**"
 
 
 @tool
@@ -131,31 +142,44 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
     interview = runtime.state["interview"]
 
     union_id: str | None = None
-
+    http_client = DingTalkHttp()
     # 1.获取钉钉账户
-    async with SessionLocal() as db:
-        async with db.begin():
-            try:
+    try:
+
+        async with SessionLocal() as db:
+            async with db.begin():
                 user_Repo = UserRepo(db)
                 ding_user_info: DingUserResponse = await user_Repo.get_ding_info_repo(
                     interview.id
                 )
                 if not ding_user_info:
-                    return f"无该面试官{interview.username}的钉钉信息"
+                    return (
+                        f"无该面试官{interview.username}的钉钉信息"
+                        f"**无法安排面试，请立即终止所有操作，通知HR绑定钉钉。**"
+                    )
                 union_id = ding_user_info.union_id
-            except Exception as e:
-                return f"获取面试官空闲时间工具-- 执行数据库失败，错误：{e}"
-
+    except Exception as e:
+        logger.exception(f"查询面试官钉钉信息失败，错误是{e}")
+        return (
+            f"【系统严重错误】查询面试官钉钉信息失败。"
+            f"**请立即中断对话，严禁调用任何工具，直接向HR输出：'数据库查询面试官钉钉信息失败，流程已中断，请人工处理。'**"
+        )
     # 2.获取钉钉日程视图
+    # try:
+    # except Exception as e:
+    #         logger.exception(f"获取钉钉日程列表失败，错误是{e}")
+    #         return (
+    #             f"获取钉钉日程列表失败",
+    #             f"**请立即中断对话，严禁调用任何工具，直接向HR输出：'获取钉钉日程列表失败失败，流程已中断，请人工处理。'**",
+    #         )
     ding_calendar_url = DingTalkApi.get_calendar_url(union_id)
-    timeMin = get_future_time(hour=9)
-    timeMax = get_future_time(hour=9, days=7)
+    timeMin = get_future_time(hour=9)  # 返回的iso
+    timeMax = get_future_time(hour=9, days=7)  # 返回的iso
     cache: HRCache = get_cache_instance()
     raw = await cache.get_ding_info(user_id=interview.id)
     if not raw:
         return f"面试官{interview.username}的钉钉token不存在或已过期"
 
-    token_ding = DingTalkTokenInfoSchema.model_validate_json(raw)
     calendar_resp = {}
 
     async def fetch_calendar(access_token: str):
@@ -164,37 +188,47 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
             return await client.get(
                 url=ding_calendar_url,
                 params={
-                    "timeMin": dt_to_iso(timeMin),
-                    "timeMax": dt_to_iso(timeMax),
+                    "timeMin": timeMin,
+                    "timeMax": timeMax,
                 },
                 headers={"x-acs-dingtalk-access-token": access_token},
             )
 
     try:
-        resp = await DingTalkHttp.request_with_ding_token(
+        resp = await http_client.request_with_ding_token(
             user_id=interview.id, make_request=fetch_calendar
         )
         resp.raise_for_status()
         calendar_resp = resp.json()
 
     except Exception as e:
-        return f"获取面试官空闲时间工具-- 执行获取钉钉日程视图失败，错误：{e}"
-
+        logger.exception(f"获取钉钉日程列表失败，错误是{e}")
+        return (
+            f"获取钉钉日程列表失败"
+            f"**请立即中断对话，严禁调用任何工具，直接向HR输出：'获取钉钉日程列表失败失败，流程已中断，请人工处理。'**"
+        )
     # 3.解析并获取空闲时间
     events = calendar_resp.get("events") or []
+    dt_time_max = iso_to_dt(timeMax)
+    dt_time_min = iso_to_dt(timeMin)
     if not events:
-        return (
-            f"该时段【{timeMin:%Y-%m-%d %H:%M} - {timeMax:%Y-%m-%d %H:%M}】时间全部空闲"
-        )
+        return f"该时段【{dt_time_min:%Y-%m-%d %H:%M} - {dt_time_max:%Y-%m-%d %H:%M}】时间全部空闲"
     events_list = []
     for event in events:
         s = event["start"].get("dateTime") or event["start"].get("date")
         e = event["end"].get("dateTime") or event["end"].get("date")
         events_list.append((iso_to_dt(s), iso_to_dt(e)))
 
-    free_slot = find_free_slot(
-        start_time=timeMin, end_time=timeMax, existing_events=events_list
-    )
+    try:
+        free_slot = find_free_slot(
+            start_time=dt_time_min, end_time=dt_time_max, existing_events=events_list
+        )
+    except Exception as e:
+        logger.exception(f"查找空闲时间段失败，内部报错: {e}")
+        return (
+            f"查找空闲时间段失败，系统内部错误：{e}。"
+            f"**请立即中断对话，严禁调用任何工具，直接向HR输出：'空闲时间计算失败，无法安排面试，请人工介入。'**"
+        )
     if free_slot:
         s, e = free_slot
         return f"找到空闲时间了：{s:%Y-%m-%d %H:%M} - {e:%Y-%m-%d %H:%M}"
@@ -203,18 +237,28 @@ async def get_interviewer_available_slot(runtime: ToolRuntime[CandidateAgentStat
 
 @tool
 async def confirm_interview_time(
-    interview_datetime: str, runtime: ToolRuntime[CandidateAgentState]
+    interview_datetime_str: str, runtime: ToolRuntime[CandidateAgentState]
 ):
     """
     确定面试时间
     参数：
-        interview_datetime：面试时间，传来的是 datetime格式的
+        interview_datetime_str：面试时间，传来的是 ISO8601格式的字符串
 
     给候选人发送面试安排邮件
     在面试官的钉钉上添加一条面试日程
     在系统上添加一条待面试的记录
     更改候选人的状态为待面试
     """
+    try:
+        interview_datetime: datetime = iso_to_dt(interview_datetime_str)
+        # 由于后面存储数据库，不能在日期中带时区，所以这里先处理一下
+        if interview_datetime.tzinfo is not None:
+            interview_datetime_without_tz = interview_datetime.astimezone(None).replace(
+                tzinfo=None
+            )
+    except Exception as e:
+        return f"{interview_datetime_str}格式化失败！{e}"
+
     candidate: CandidateSchema = runtime.state["candidate"]
     position: PositionSchema = runtime.state["position"]
     user: UserSchema = runtime.state["interview"]
@@ -236,14 +280,18 @@ async def confirm_interview_time(
         password=settings.EMAIL_PASSWORD,
     )
     to = candidate.email
-    subject = "美味味道【面试邀请】"
+    subject = "美味黄油【面试邀请】"
     try:
         async with EmailBot(botObj) as bot:
             await bot.send_email(to=to, subject=subject, text=body)
         results.append("最终确认面试邮件发送成功")
     except Exception as e:
         results.append(f"最终确认面试邮件发送失败，错误是：{e}")
-
+        logger.error(f"发送确认邮件给候选人 {candidate.name} 失败: {e}")
+        return (
+            f"最终确认面试邮件发送失败"
+            f"系统错误：最终确认面试邮件发送失败。**请立即终止流程，向HR报告此代码错误。严禁重试！**",
+        )
     # 2.在面试官的钉钉上添加一条面试日程
     union_id: str | None = None
 
@@ -255,19 +303,23 @@ async def confirm_interview_time(
                     user_id=user.id
                 )
                 if not user_ding_info:
-                    return "无该面试官的钉钉信息"
-
+                    results.append("面试官未绑定钉钉，日程创建失败。")
+                    return "无面试官钉钉信息"
                 union_id = user_ding_info.union_id
         url = DingTalkApi.create_calendar_url(unionID=union_id)
-        cache: HRCache = get_cache_instance()
-        tokens_info: DingTalkTokenInfoSchema = await cache.get_ding_info(user.id)
+
+        start_dt = (
+            iso_to_dt(interview_datetime)
+            if isinstance(interview_datetime, str)
+            else interview_datetime
+        )
         data = {
             "summary": "面试安排",
             "start": {
-                "dateTime": dt_to_iso(interview_datetime),
+                "dateTime": dt_to_iso(start_dt),
             },
             "end": {
-                "dateTime": dt_to_iso(get_future_time(hours=1)),
+                "dateTime": dt_to_iso(start_dt + timedelta(minutes=30)),
             },
         }
 
@@ -280,16 +332,17 @@ async def confirm_interview_time(
                 )
 
         try:
-            resp = await DingTalkHttp.request_with_ding_token(user.id, create_calendar)
+            http_client = DingTalkHttp()
+            resp = await http_client.request_with_ding_token(user.id, create_calendar)
             if resp.status_code != 200:
                 results.append(
-                    f"钉钉接口添加面试日程错误，错误码是:{res.status_code},错误是:{res.text}"
+                    f"钉钉接口添加面试日程错误，错误码是:{resp.status_code},错误是:{resp.text}"
                 )
             else:
                 results.append("钉钉创建面试日程成功")
 
         except BusinessException as e:
-            return e
+            results.append(f"钉钉创建面试日程失败：{e}")
 
     except Exception as e:
         results.append(f"钉钉创建面试日程失败,错误是{e}")
@@ -300,12 +353,15 @@ async def confirm_interview_time(
             async with db.begin():
                 Interview_repo = Interview(db)
                 # 数据库只能添加datetime的
-                data = {
-                    "scheduled_time": interview_datetime,
-                    "candidate_id": candidate.id,
-                    "interviewer_id": user.id,
-                }
-                await Interview_repo.create_interview_repo(data)
+                await Interview_repo.create_interview_repo(
+                    {
+                        # 面试时间因为是存储到postgresql数据库中，现在是只能存储没有带时区的日期
+                        "scheduled_time": interview_datetime_without_tz,
+                        "result": InterviewResultEnum.PENDING,
+                        "candidate_id": candidate.id,
+                        "interviewer_id": user.id,
+                    }
+                )
 
                 # 4.更改候选人的状态为待面试
                 candidate_repo = CandidateRepo(db)
@@ -316,11 +372,11 @@ async def confirm_interview_time(
                     return "更新候选人状态失败，未找到该候选人"
 
         results.append("系统记录创建成功，候选人状态已更新")
-    except InterruptedError:
-        return f"该候选人已安排过面试，请勿重复操作"
+    except IntegrityError:
+        return f"该候选人已安排过面试，请勿重复操作,请直接结束当前流程。"
 
     except Exception as e:
-        return f"安排面试失败，系统内部错误: {e}"
+        return f"【系统严重错误】安排面试数据库写入失败：{e}。**请立即中断对话，严禁调用任何工具，直接向HR输出：'数据库写入失败，流程已中断，请人工处理。'**"
 
     final_report = "面试安排流程执行完毕，详情如下：\n" + "\n".join(
         [f"- {r}" for r in results]
@@ -344,10 +400,9 @@ async def send_interview_email(
     state: CandidateAgentState = runtime.state
     candidate = state["candidate"]
     position: PositionSchema = state["position"]
-    async with EmailBot(botObj) as bot:
-        to = candidate.email
-        subject = "美味味道【面试邀请】"
-        text = f"""
+    if candidate.status == CandidateStatusEnum.WAITING_FOR_INTERVIEW:
+        return "候选人已处于待面试状态，无需再次发送邀约邮件。"
+    text = f"""
                 您好！感谢您对我们{position.title}岗位的关注。经初步沟通，我们诚挚邀请您参加面试：
                     面试时间：{interview_datetime}
                     面试方式：线下面试
@@ -355,14 +410,19 @@ async def send_interview_email(
                     如上述时间与您安排有冲突，请随时回复本消息告知我，我们可以为您协调其他合适的时间，无需勉强。
                     期待您的回复，祝好！
             """
+    async with EmailBot(botObj) as bot:
+        to = candidate.email
+        subject = "美味黄油【面试邀请】"
 
         try:
             await bot.send_email(to=to, subject=subject, text=text)
+            return (
+                f"给候选人发送面试邮件成功！面试时间初步确认为:{interview_datetime}。"
+                f"**【重要指令】邀约邮件已发送，当前任务已彻底完成！请立即结束对话，严禁再调用任何工具！等待候选人回复即可。**"
+            )
         except Exception as e:
             logger.warning(e)
-            return f"给候选人发送邮件失败:{e}"
-
-        return f"给候选人发送面试邮件成功！面试时间初步确认为:{interview_datetime}"
+            return f"发送邮件失败：{e}。这是一个系统错误，请立即终止当前任务，不要再尝试发送邮件，向HR报告错误。"
 
 
 @tool
@@ -379,7 +439,7 @@ async def refuse_interview(runtime: ToolRuntime[CandidateAgentState]):
                 )
         return f"已成功将候选人状态更新为：已拒绝面试"
     except Exception as e:
-        return f"调用拒绝面试工具失败，错误是:{e}"
+        return f"拒绝面试状态更新失败，错误: {e}。**请立即终止操作，直接向HR报告。**"
 
 
 @tool
@@ -438,16 +498,51 @@ class CandidateProcessAgent:
             #
             state_schema=CandidateAgentState,
         )
-        config = {"configurable": {"thread_id": thread_id}}
-        result = await agent.ainvoke(
-            {
-                "messages": messages,
-                "candidate": self.candiadate,
-                "position": self.position,
-                "interview": self.interview,
-            },
-            config=config,
-        )
+        config = {
+            "configurable": {"thread_id": thread_id},
+            # 限制最大循环次数
+            "recursion_limit": 30,
+        }
+        try:
+            async for event in agent.astream(
+                {
+                    "messages": messages,
+                    "candidate": self.candiadate,
+                    "position": self.position,
+                    "interview": self.interview,
+                },
+                config=config,
+            ):
+                for node_name, state in event.items():
+                    logger.info(f"--- 节点: {node_name} ---")
+                    if state and isinstance(state, dict) and "messages" in state:
+                        final_state = state  # 保存最新状态
+                        msg = state["messages"][-1]
+                        logger.info(f"类型: {msg.type} | 内容: {msg.content}")
+
+                        # 🚨 终极刹车：如果你发现工具成功发完邮件了
+                        if msg.type == "tool" and "发送面试邮件成功" in msg.content:
+                            logger.info("✅ 邮件发送成功，强行终止 Agent 循环！")
+                            # 手动追加一条 AI 的回复，让最终结果完整
+                            state["messages"].append(
+                                AIMessage(
+                                    content="已成功发送初试邀约邮件，等待候选人回复。"
+                                )
+                            )
+                            return state  # 👈 直接 return，打破循环！
+
+            return final_state
+        except GraphRecursionError:
+            logger.warning("Agent 达到递归上限，返回已有状态")
+            return (
+                final_state
+                if final_state
+                else {"messages": [AIMessage(content="流程执行步数超限，请人工检查。")]}
+            )
+        except Exception as e:
+            logger.error(f"❌ 执行崩溃: {e}")
+            raise e
+
         return result
 
     # 要想变成 异步上下文管理的话，就得加下面两个方法

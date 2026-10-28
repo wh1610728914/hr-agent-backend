@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 
-def get_future_time(hour: str, days: int = 1, hours: int = 0) -> datetime:
+def get_future_time(hour: int, days: int = 1, hours: int = 0) -> datetime:
     """获取明天（或 N 天后）x点的日期 (带东八区时区)
     hour:小时
     days：往后退几天，默认1天
@@ -57,11 +57,12 @@ def find_free_slot(
 ) -> tuple | None:
     """
     查找空闲时间段
-    :param start_time: 查询范围的开始时间 (带时区)
-    :param end_time: 查询范围的结束时间 (带时区)
+    :param start_time: 查询范围的开始时间  datetime
+    :param end_time: 查询范围的结束时间  datetime
     :param existing_events: 已有的日程列表，格式为 [({'dateTime': 'xxx'}, {'dateTime': 'xxx'}), ...]
     :return: 返回一个空闲元组 (free_start, free_end)，如果没有空闲返回 None
     """
+
     # 1. 生成标准工作时段 (上午 9-12，下午 14-18，按 1 小时切分)
     work_slots = []
     current_day = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -90,14 +91,20 @@ def find_free_slot(
     # 2. 将你的日程转为统一的 datetime 对象格式
     busy_slots = []
     for event in existing_events:
-        # 兼容字典 {'dateTime': '...'} 或者直接字符串传入
-        s_str = event[0]["dateTime"] if isinstance(event[0], dict) else event[0]
-        e_str = event[1]["dateTime"] if isinstance(event[1], dict) else event[1]
+        # 兼容字典 {'dateTime': '...'} 或者直接字符串/datetime 传入
+        s_val = event[0]["dateTime"] if isinstance(event[0], dict) else event[0]
+        e_val = event[1]["dateTime"] if isinstance(event[1], dict) else event[1]
 
-        s_dt = datetime.fromisoformat(s_str)
-        e_dt = datetime.fromisoformat(e_str)
+        # 判断：如果是字符串才用 fromisoformat 转，如果已经是 datetime 对象（比如你在 agent 里转过），就直接用
+        s_dt = datetime.fromisoformat(s_val) if isinstance(s_val, str) else s_val
+        e_dt = datetime.fromisoformat(e_val) if isinstance(e_val, str) else e_val
+
+        # 🚨 关键：强制统一时区。把日程的时区转成和你传进来的 start_time 一样的时区（东八区）
+        # 这样才不会出现东八区和 UTC 比较报错的问题
+        s_dt = s_dt.astimezone(start_time.tzinfo)
+        e_dt = e_dt.astimezone(start_time.tzinfo)
+
         busy_slots.append((s_dt, e_dt))
-
     # 3. 核心逻辑：从工作时段中剔除已被占用的时间，寻找空闲
     for slot_start, slot_end in work_slots:
         # 过滤出和当前标准时段有交集的所有日程

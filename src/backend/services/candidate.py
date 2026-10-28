@@ -116,3 +116,10 @@ async def get_score_candidate(db: AsyncSession, id):
     if not res:
         raise BusinessException(message="该候选人暂时没有ai得分情况，请稍后查询")
     return CandidateAIScopeSchema.model_validate(res)
+
+
+async def update_candidate_status_service(db: AsyncSession, id, val):
+    """获取候选人ai得分情况"""
+    candidate_repo = CandidateRepo(db)
+    res = await candidate_repo.update_candidate_status(id, val)
+    return CandidateSchema.model_validate(res)

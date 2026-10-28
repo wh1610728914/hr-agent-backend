@@ -9,8 +9,8 @@ from typing import Optional
 # frozen=True不允许修改
 @dataclass(frozen=True)
 class EmailAddress:
-    email: str
-    password: str
+    name: str
+    address: str
 
 
 @dataclass(frozen=True)

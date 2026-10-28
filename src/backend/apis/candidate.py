@@ -24,6 +24,7 @@ from backend.services.candidate import (
     get_candidate_list_service,
     get_score_candidate,
     parse_resume_service,
+    update_candidate_status_service,
     upload_resume_service,
 )
 from backend.tasks.agent import run_agent_test
@@ -139,8 +140,8 @@ async def agent_test(
     candidate_repo = CandidateRepo(db)
     position_repo = PositionRepo(db)
     interview_repo = UserRepo(db)
-    candidate_model = await candidate_repo.by_get_id("jbCavjiv2jbXLYfvuU2xQt")
-    print("对应的候选人是", CandidateSchema.model_validate(candidate_model))
+    candidate_model = await candidate_repo.by_get_id("PWiQS3rdfASXRNbUhJAARR")
+    # print("对应的候选人是", CandidateSchema.model_validate(candidate_model))
     position_model = await position_repo.get_by_id("c4YerzVnpyukj5WXH75sV2")
     interview_model = await interview_repo.check_by_id("5j3UfAnoxLVdg4RVN7n3xH")
     res = background_tasks.add_task(
@@ -150,3 +151,16 @@ async def agent_test(
         interview=UserSchema.model_validate(interview_model),
     )
     return Response.success(data=res)
+
+
+@router.get("/update/status/{candidate_id}", summary="更新候选人状态")
+async def update_candidate_status(
+    candidate_id: str, val: str, db: AsyncSession = Depends(get_db)
+):
+    """
+    candidate_id：候选人id
+    val：更新的候选人状态
+    """
+
+    res = await update_candidate_status_service(candidate_id, val, db)
+    return Response.success(message=res)

@@ -7,4 +7,6 @@ async def getDingInfoService(user_id: str, db: AsyncSession):
     user_repo = UserRepo(db)
     res = await user_repo.get_ding_info_repo(user_id)
     # model_validate 验证并转换模型
+    if not res:
+        return f"无该面试官钉钉消息"
     return DingUserResponse.model_validate(res)

@@ -68,6 +68,8 @@ class CandidateRepo(BaseRepo):
     async def update_candidate_status(self, id, val):
         """修改候选人状态"""
         candidate = await self.by_get_id(id)
+        if not candidate:
+            raise BusinessException(message="没有对应的候选人")
         candidate.status = val
 
         return candidate

@@ -1,7 +1,7 @@
 from typing import Literal
 
 from backend.schemas.agents import ResumeAgentsResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class InviteInfoSchema(BaseModel):

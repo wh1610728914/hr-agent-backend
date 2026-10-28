@@ -25,6 +25,7 @@ class HRCache:
     invite_prefix = "invite:"  # key前缀，用于命名空间隔离
     dingding_prefix = "dings:"
     ocr_prefix = "orc:"
+    email_last_uid_key = "email:last_uid"
 
     def __init__(self):
         # 获取lifespan中初始化的redis后端
@@ -92,4 +93,14 @@ class HRCache:
         result = await self.get(key)
         if result is not None:  # 拿到的json，json字符串变成对象
             return OCRInfoSchema.model_validate_json(result)
+        return None
+
+    # ================ 定时轮询专属方法 ===================================
+    async def set_email_last_uid(self, last_uid: int, ex: int | None = None):
+        await self.set(self.email_last_uid_key, last_uid, ex=ex or 0)
+
+    async def get_email_last_uid(self):
+        result = await self.get(self.email_last_uid_key)
+        if result is not None:
+            return int(result)
         return None

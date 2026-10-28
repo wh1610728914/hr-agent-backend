@@ -1,5 +1,8 @@
 from contextlib import asynccontextmanager
 
+from backend.schedule import shutdown_email_polling, start_email_polling
+
+from loguru import logger
 import redis.asyncio as asioRedis
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -57,9 +60,30 @@ async def manage_redis(app: FastAPI):
     await redis.close()
 
 
+@asynccontextmanager
+async def email_pool(app: FastAPI):
+    """轮询查找最新邮件 candidate的agent"""
+    logger.info("轮询开启中。。。。")
+    bot, scheduler = await start_email_polling()
+
+    try:
+
+        yield
+    finally:
+        logger.info("轮询关闭中。。。。")
+        await shutdown_email_polling(bot, scheduler)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with manage_redis(app):
+        async with email_pool(app):
+            yield
+
+
 app = FastAPI(
     # 把定义好的lifespan函数注册到fastAPI实例中
-    lifespan=manage_redis
+    lifespan=lifespan,
 )
 app.include_router(api)
 # 注册异常处理器
