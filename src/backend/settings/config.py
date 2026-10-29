@@ -15,12 +15,12 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     # DBTABASE_URL: str | None = None
     # 数据库配置
-    DB_HOST: str = "localhost"
-    DB_PORT: int = 5432
-    DB_USER: str = "postgres"
-    DB_PASSWORD: str = ""
-    DB_NAME: str = "agent_hr"
-    DB_AGENT_NAME: str = "agent_hr_candidate"
+    DB_HOST: str
+    DB_PORT: int
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_NAME: str
+    DB_AGENT_NAME: str
     # JWT配置
     JWT_SECRET_KEY: str
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES: int = 120
@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     # validation_alias 去读取MAIL_USERNAME作为MAIL_FROM的值
     # MAIL_FROM: str = Field(..., validation_alias="MAIL_USERNAME")
     MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.qq.com"
-    MAIL_FROM_NAME: str = "大真真"
+    MAIL_SERVER: str
+    MAIL_FROM_NAME: str
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
 
@@ -61,10 +61,7 @@ class Settings(BaseSettings):
     # LLM_DEEPSEEK_MODEL: str
 
     # 邮箱机器人配置
-    IMAP_HOST: str = "imap.qq.com"
-    # SMTP_HOST: str = Field(..., validation_alias="MAIL_SERVER")
-    # EMAIL_USERNAME: str = Field(..., validation_alias="MAIL_USERNAME")
-    # EMAIL_PASSWORD: str = Field(..., validation_alias="MAIL_PASSWORD")
+    IMAP_HOST: str
 
     @computed_field
     @property
@@ -89,7 +86,7 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
-        return timedelta(minutes=self.JWT_ACCESS_TOKEN_EXPIRES_MINUTES)
+        return timedelta(days=self.JWT_ACCESS_TOKEN_EXPIRES_DAYS)
 
     @computed_field
     @property

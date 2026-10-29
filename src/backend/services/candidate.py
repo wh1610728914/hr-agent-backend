@@ -49,17 +49,17 @@ async def upload_resume_service(file: UploadFile, user: UserModel, db: AsyncSess
 
     # 2.把简历存到文件夹中
     file_ex = Path(file.filename).suffix.lower()  # 拿到后缀名
-    new_file_name = f"{uuid4()}{file_ex}"
-    save_path = Path(settings.RESUME_DIR) / new_file_name
-    async with aiofiles.open(save_path, "wb") as fp:
-        try:
+    stored_name = f"{uuid4()}{file_ex}"
+    save_path = Path(settings.RESUME_DIR) / stored_name
+    try:
+        async with aiofiles.open(save_path, "wb") as fp:
             """把文件存入"""
             chunk = await file.read(1024)
             while chunk:
                 await fp.write(chunk)
                 chunk = await file.read(1024)
-        finally:
-            await fp.close()
+    except Exception as e:
+        return f"把文件存到aiofiles失败，错误是{e}"
 
     # 3.把word变成pdf
     transform_types = [".docx", ".doc"]
@@ -71,12 +71,13 @@ async def upload_resume_service(file: UploadFile, user: UserModel, db: AsyncSess
         try:
             await file_converter.convert()
             save_path = pdf_path
+            stored_name = pdf_path.name
         except Exception as e:
             logger.error(f"word转pdf失败：{e}")
 
     # 4.存数据库
     candidate_repo = ResumeRepo(db)
-    res = await candidate_repo.upload_resume(file_path=save_path, uploader_id=user.id)
+    res = await candidate_repo.upload_resume(file_path=stored_name, uploader_id=user.id)
 
     return ResumeResponse.model_validate(res)
 

@@ -20,6 +20,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_cache import FastAPICache
 
+from loguru import logger
+
+logger.remove()
+logger.add(
+    "log/app.log",
+    rotation="10 MB",  # 每个文件最大 10MB
+    retention="7 days",  # 保留最近 7 天的日志
+    compression="zip",  # 压缩旧日志为 zip 文件
+    level="INFO",  # 最低记录级别
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
+    encoding="utf-8",
+    enqueue=True,  # 多进程安全写入
+)
+
 
 # 异步上下文管理器
 # @asynccontextmanager

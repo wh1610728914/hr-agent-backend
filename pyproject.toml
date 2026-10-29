@@ -27,7 +27,7 @@ dependencies = [
     "shortuuid>=1.0.13",
     "httpx>=0.28.1",
     "aiofiles>=25.1.0",
-    "pywin32>=312",
+    "pywin32>=312;sys_platform=='win32'",
     "pillow>=13.0.0",
     "pymupdf>=2.0",
     "python-multipart>=0.0.32",

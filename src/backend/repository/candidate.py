@@ -34,11 +34,6 @@ class CandidateRepo(BaseRepo):
 
     async def create_candidate(self, user, data):
         """创建候选人"""
-        # candidate = await self.session.scalar(
-        #     select(CandidateModel).where(CandidateModel.email == data["email"])
-        # )
-        # if candidate:
-        #     raise BusinessException(message="该候选人不可重复添加")
         # 字典解包实例化orm模型 ,直接解包给数据库
         candidateInfo = CandidateModel(**data)
         candidateInfo.creator_id = user.id
@@ -71,9 +66,7 @@ class CandidateRepo(BaseRepo):
 
     async def update_candidate_status(self, candidate, val):
         """修改候选人状态"""
-        # candidate = await self.by_get_id(id)
-        # if not candidate:
-        #     raise BusinessException(message="没有对应的候选人")
+
         candidate.status = val
 
         return candidate
